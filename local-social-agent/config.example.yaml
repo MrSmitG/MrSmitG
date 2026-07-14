@@ -1,0 +1,42 @@
+# ------------------------------------------------------------------------------
+# Local Social Agent - configuration
+#
+# Copy this file to `config.yaml` and tweak it. Every value below is the default,
+# so an empty config.yaml behaves exactly like this file.
+# ------------------------------------------------------------------------------
+
+llm:
+  # Which local LLM backend to talk to. "ollama" uses a locally running Ollama
+  # server. If the backend is unreachable, the agent transparently falls back to
+  # a built-in deterministic planner so it always keeps working offline.
+  provider: ollama
+  # Ollama HTTP endpoint (default install listens here).
+  base_url: http://127.0.0.1:11434
+  # Model tag to use. Pull it first with e.g. `ollama pull llama3.1`.
+  model: llama3.1
+  # Seconds before giving up on the local model and using the fallback planner.
+  timeout: 60
+
+sandbox:
+  # All file reads/writes are jailed inside this directory (created on start).
+  workspace_dir: workspace_data
+  # Safety mode for actions that touch the outside world (e.g. posting online):
+  #   dry_run  -> simulate the action, never hit the network (SAFE DEFAULT)
+  #   live     -> actually perform the action (requires credentials + approval)
+  mode: dry_run
+  # When true, sensitive actions pause and wait for explicit human approval.
+  require_approval: true
+  # Max number of external posts allowed per rolling hour (anti-spam guard).
+  max_posts_per_hour: 5
+  # Hard cap on tool calls the agent may make for a single user request.
+  max_steps_per_task: 12
+
+instagram:
+  # Credentials are read from the environment, never stored here:
+  #   INSTAGRAM_USERNAME / INSTAGRAM_PASSWORD
+  # Leave enabled=false to keep the Instagram tool in pure simulation.
+  enabled: true
+
+server:
+  host: 127.0.0.1
+  port: 8765
