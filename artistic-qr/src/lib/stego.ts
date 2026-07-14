@@ -1,7 +1,7 @@
 /** Invisible payload embed/extract — the picture carries the data, no QR grid. */
 
 const MAGIC = [0x56, 0x45, 0x49, 0x4c] // VEIL
-const MAX_PAYLOAD_BYTES = 2048
+export const MAX_PAYLOAD_BYTES = 2048
 
 function checksum(bytes: Uint8Array): number {
   let sum = 0x5a5a

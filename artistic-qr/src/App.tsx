@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { embedPayload, extractPayload } from './lib/stego'
+import { embedPayload, extractPayload, MAX_PAYLOAD_BYTES } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
 
@@ -19,6 +19,9 @@ export default function App() {
   const lastFrameRef = useRef<ImageData | null>(null)
   const payloadRef = useRef(payload)
   const fileRef = useRef<HTMLInputElement>(null)
+  const normalizedPayload = payload.trim() || ' '
+  const payloadBytes = new TextEncoder().encode(normalizedPayload).length
+  const payloadTooLong = payloadBytes > MAX_PAYLOAD_BYTES
 
   useEffect(() => {
     payloadRef.current = payload
@@ -151,7 +154,15 @@ export default function App() {
               onChange={(e) => setPayload(e.target.value)}
               placeholder="URL, text, anything…"
               spellCheck={false}
+              aria-invalid={payloadTooLong}
+              aria-describedby={payloadTooLong ? 'payload-error' : undefined}
             />
+            {payloadTooLong && (
+              <em id="payload-error" role="alert">
+                Message is {payloadBytes.toLocaleString()} bytes; shorten it to {MAX_PAYLOAD_BYTES.toLocaleString()} bytes
+                or fewer before downloading.
+              </em>
+            )}
           </label>
 
           <div className="theme-grid" role="listbox" aria-label="Art themes">
@@ -178,10 +189,10 @@ export default function App() {
           </div>
 
           <div className="actions">
-            <button type="button" className="primary" onClick={scanFrame}>
+            <button type="button" className="primary" onClick={scanFrame} disabled={payloadTooLong}>
               Scan this frame
             </button>
-            <button type="button" className="ghost" onClick={downloadPng}>
+            <button type="button" className="ghost" onClick={downloadPng} disabled={payloadTooLong}>
               Download PNG
             </button>
             <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
