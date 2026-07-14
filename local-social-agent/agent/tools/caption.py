@@ -78,14 +78,17 @@ class WriteCaptionTool(Tool):
             return None
 
     def _fallback(self, topic: str, tone: str, count: int) -> Dict[str, Any]:
-        openers = {
-            "playful": "Caught a little magic today",
-            "inspirational": "Chase the light, always",
-            "minimal": topic.capitalize(),
-            "friendly": f"Loving this {topic}",
+        # Normalise the subject so sentences read naturally regardless of any
+        # leading article the user (or planner) included.
+        subject = re.sub(r"^(a|an|the)\s+", "", topic.strip(), flags=re.IGNORECASE)
+        subject = subject or topic.strip()
+        templates = {
+            "playful": f"Caught a little magic today. {subject.capitalize()} just hits different.",
+            "inspirational": f"Chase the light, always. Grateful for moments like this {subject}.",
+            "minimal": f"{subject.capitalize()}.",
+            "friendly": f"Loving this {subject}. Some views never get old.",
         }
-        opener = openers.get(tone, openers["friendly"])
-        text = f"{opener}. {topic.capitalize()} never gets old."
+        text = templates.get(tone, templates["friendly"])
         words = [w for w in re.split(r"[^a-zA-Z0-9]+", topic.lower()) if w and w not in _STOPWORDS]
         seeds = words + ["photography", "instadaily", "vibes", "mood", "aesthetic",
                          "picoftheday", "instagood", "content"]
