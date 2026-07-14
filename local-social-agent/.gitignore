@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Local config & secrets
+config.yaml
+.env
+
+# Sandbox output (generated images, receipts, sessions, audit log)
+workspace_data/
+
+# OS
+.DS_Store

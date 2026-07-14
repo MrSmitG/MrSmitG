@@ -1,0 +1,14 @@
+# Core runtime dependencies for the Local Social Agent.
+# Everything here is pure-Python or ships prebuilt wheels for macOS (Apple Silicon & Intel).
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+Pillow==11.1.0
+PyYAML==6.0.2
+requests==2.32.3
+
+# --- Optional extras (uncomment to enable) --------------------------------
+# instagrapi==2.1.2          # real Instagram publishing (LIVE mode only)
+# diffusers==0.32.1          # local Stable Diffusion image generation
+# torch==2.5.1               # backend for diffusers

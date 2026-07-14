@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local Social Agent</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">◐</div>
+        <div>
+          <h1>Local Social Agent</h1>
+          <p class="tagline">Runs on your machine. Nothing leaves without your OK.</p>
+        </div>
+      </div>
+
+      <div class="status-card" id="status-card">
+        <div class="status-row">
+          <span>Sandbox</span>
+          <span class="pill" id="mode-pill">…</span>
+        </div>
+        <div class="status-row">
+          <span>Local LLM</span>
+          <span class="pill" id="llm-pill">…</span>
+        </div>
+        <div class="status-row">
+          <span>Instagram</span>
+          <span class="pill" id="ig-pill">…</span>
+        </div>
+        <div class="workspace" id="workspace-path"></div>
+      </div>
+
+      <div class="tools-card">
+        <h2>Capabilities</h2>
+        <ul id="tools-list"></ul>
+      </div>
+
+      <div class="examples">
+        <h2>Try saying</h2>
+        <button class="example">Create a sunset over the ocean, edit it and prepare an Instagram post</button>
+        <button class="example">Make a minimalist coffee photo and write a caption</button>
+        <button class="example">Generate a neon city skyline and post it to Instagram</button>
+      </div>
+    </aside>
+
+    <main class="chat">
+      <div class="messages" id="messages">
+        <div class="msg agent">
+          <div class="bubble">
+            Hi! I'm your local social agent. Tell me what to create and I'll plan the
+            steps, generate & edit the image, write a caption, and get it ready to post —
+            all locally. Posting is <strong>simulated</strong> until you switch to live mode
+            and approve it.
+          </div>
+        </div>
+      </div>
+
+      <form class="composer" id="composer">
+        <input id="input" autocomplete="off" placeholder="e.g. Create a golden-hour beach photo and prepare an Instagram post" />
+        <button type="submit" id="send">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
