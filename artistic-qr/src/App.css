@@ -234,6 +234,10 @@ body {
   box-shadow: 0 0 0 3px rgba(224, 122, 61, 0.15);
 }
 
+.field input[aria-invalid='true'] {
+  border-color: rgba(224, 122, 61, 0.7);
+}
+
 .slider input[type='range'] {
   width: 100%;
   accent-color: var(--ember);
@@ -342,6 +346,14 @@ body {
 
 .ghost:hover {
   border-color: rgba(220, 232, 226, 0.4);
+}
+
+.primary:disabled,
+.ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+  filter: none;
 }
 
 .scan {
