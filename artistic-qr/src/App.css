@@ -44,6 +44,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
+  pointer-events: none;
   background:
     radial-gradient(ellipse 80% 55% at 15% 10%, rgba(47, 111, 106, 0.35), transparent 55%),
     radial-gradient(ellipse 70% 50% at 90% 20%, rgba(224, 122, 61, 0.22), transparent 50%),

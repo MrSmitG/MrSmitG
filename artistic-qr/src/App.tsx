@@ -10,7 +10,7 @@ const SIZE = 512
 export default function App() {
   const [payload, setPayload] = useState('https://github.com/MrSmitG')
   const [theme, setTheme] = useState<ThemeId>('space-cruise')
-  const [strength, setStrength] = useState(0.62)
+  const [strength, setStrength] = useState(0.72)
   const [motion, setMotion] = useState(true)
   const [reveal, setReveal] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
@@ -21,6 +21,7 @@ export default function App() {
   const matrixRef = useRef<QrMatrix | null>(null)
   const timeRef = useRef(0)
   const rafRef = useRef(0)
+  const lastFrameRef = useRef<ImageData | null>(null)
 
   const rebuildMatrix = useEffectEvent((text: string) => {
     try {
@@ -34,7 +35,7 @@ export default function App() {
 
   useEffect(() => {
     rebuildMatrix(payload)
-  }, [payload, rebuildMatrix])
+  }, [payload])
 
   useEffect(() => {
     if (!artRef.current) {
@@ -65,25 +66,26 @@ export default function App() {
         const engraved = engraveQrIntoImageData(
           artCtx.getImageData(0, 0, SIZE, SIZE),
           matrix,
-          { strength: reveal ? Math.min(1, strength + 0.25) : strength },
+          { strength: reveal ? Math.min(1, strength + 0.2) : strength },
         )
         ctx.putImageData(engraved, 0, 0)
+        lastFrameRef.current = engraved
 
         if (reveal) {
-          // Ghost outline of modules for debugging
-          const total = matrix.size + 4
+          const total = matrix.size + 6
           const mw = SIZE / total
-          ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+          ctx.strokeStyle = 'rgba(255,255,255,0.14)'
           ctx.lineWidth = 1
           for (let y = 0; y < matrix.size; y++) {
             for (let x = 0; x < matrix.size; x++) {
               if (!matrix.modules[y][x]) continue
-              ctx.strokeRect((x + 2) * mw, (y + 2) * mw, mw, mw)
+              ctx.strokeRect((x + 3) * mw, (y + 3) * mw, mw, mw)
             }
           }
         }
       } else {
         ctx.drawImage(art, 0, 0)
+        lastFrameRef.current = ctx.getImageData(0, 0, SIZE, SIZE)
       }
 
       rafRef.current = requestAnimationFrame(frame)
@@ -94,16 +96,30 @@ export default function App() {
   }, [theme, strength, motion, reveal])
 
   const verifyScan = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    if (!ctx) return
-    const imageData = ctx.getImageData(0, 0, SIZE, SIZE)
-    const code = jsQR(imageData.data, SIZE, SIZE, { inversionAttempts: 'attemptBoth' })
-    if (code?.data) {
-      setScanResult(code.data)
-      setScanStatus('ok')
-    } else {
+    try {
+      const frame =
+        lastFrameRef.current ??
+        canvasRef.current?.getContext('2d', { willReadFrequently: true })?.getImageData(0, 0, SIZE, SIZE)
+
+      if (!frame) {
+        setScanStatus('fail')
+        setScanResult(null)
+        return
+      }
+
+      const code = jsQR(frame.data, frame.width, frame.height, {
+        inversionAttempts: 'attemptBoth',
+      })
+
+      if (code?.data) {
+        setScanResult(code.data)
+        setScanStatus('ok')
+      } else {
+        setScanResult(null)
+        setScanStatus('fail')
+      }
+    } catch (err) {
+      console.error('Scan failed', err)
       setScanResult(null)
       setScanStatus('fail')
     }
@@ -141,7 +157,7 @@ export default function App() {
         <section className="controls" aria-label="Controls">
           <h1>Hide a QR inside moving art</h1>
           <p className="lede">
-            The code is engraved into luminance — your phone reads it, your eyes see a painting.
+            The code is engraved into luminance — your eyes see a painting, your phone still reads it.
           </p>
 
           <label className="field">
@@ -176,7 +192,7 @@ export default function App() {
             </span>
             <input
               type="range"
-              min={0.35}
+              min={0.4}
               max={0.95}
               step={0.01}
               value={strength}
@@ -206,12 +222,12 @@ export default function App() {
           </div>
 
           {scanStatus === 'ok' && (
-            <p className="scan ok" role="status">
+            <p className="scan ok" role="status" data-testid="scan-ok">
               Scanned: <code>{scanResult}</code>
             </p>
           )}
           {scanStatus === 'fail' && (
-            <p className="scan fail" role="status">
+            <p className="scan fail" role="status" data-testid="scan-fail">
               No QR found — raise Engrave depth a bit and try a still frame.
             </p>
           )}
