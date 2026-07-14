@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState, useEffectEvent } from 'react'
-import jsQR from 'jsqr'
-import { createQrMatrix, type QrMatrix } from './lib/qr'
-import { engraveQrIntoImageData } from './lib/engrave'
+import { useEffect, useRef, useState } from 'react'
+import { embedPayload, extractPayload } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
 
@@ -10,31 +8,22 @@ const SIZE = 512
 export default function App() {
   const [payload, setPayload] = useState('https://github.com/MrSmitG')
   const [theme, setTheme] = useState<ThemeId>('space-cruise')
-  const [strength, setStrength] = useState(0.72)
   const [motion, setMotion] = useState(true)
-  const [reveal, setReveal] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'fail'>('idle')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const artRef = useRef<HTMLCanvasElement | null>(null)
-  const matrixRef = useRef<QrMatrix | null>(null)
   const timeRef = useRef(0)
   const rafRef = useRef(0)
   const lastFrameRef = useRef<ImageData | null>(null)
-
-  const rebuildMatrix = useEffectEvent((text: string) => {
-    try {
-      matrixRef.current = createQrMatrix(text.trim() || ' ')
-      setScanStatus('idle')
-      setScanResult(null)
-    } catch {
-      matrixRef.current = null
-    }
-  })
+  const payloadRef = useRef(payload)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    rebuildMatrix(payload)
+    payloadRef.current = payload
+    setScanStatus('idle')
+    setScanResult(null)
   }, [payload])
 
   useEffect(() => {
@@ -48,7 +37,7 @@ export default function App() {
     if (!canvas) return
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     const art = artRef.current
-    const artCtx = art.getContext('2d')
+    const artCtx = art.getContext('2d', { willReadFrequently: true })
     if (!ctx || !artCtx) return
 
     let last = performance.now()
@@ -61,31 +50,14 @@ export default function App() {
       artCtx.clearRect(0, 0, SIZE, SIZE)
       drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
 
-      const matrix = matrixRef.current
-      if (matrix) {
-        const engraved = engraveQrIntoImageData(
-          artCtx.getImageData(0, 0, SIZE, SIZE),
-          matrix,
-          { strength: reveal ? Math.min(1, strength + 0.2) : strength },
-        )
-        ctx.putImageData(engraved, 0, 0)
-        lastFrameRef.current = engraved
-
-        if (reveal) {
-          const total = matrix.size + 6
-          const mw = SIZE / total
-          ctx.strokeStyle = 'rgba(255,255,255,0.14)'
-          ctx.lineWidth = 1
-          for (let y = 0; y < matrix.size; y++) {
-            for (let x = 0; x < matrix.size; x++) {
-              if (!matrix.modules[y][x]) continue
-              ctx.strokeRect((x + 3) * mw, (y + 3) * mw, mw, mw)
-            }
-          }
-        }
-      } else {
-        ctx.drawImage(art, 0, 0)
-        lastFrameRef.current = ctx.getImageData(0, 0, SIZE, SIZE)
+      const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
+      try {
+        const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
+        ctx.putImageData(hidden, 0, 0)
+        lastFrameRef.current = hidden
+      } catch {
+        ctx.putImageData(raw, 0, 0)
+        lastFrameRef.current = raw
       }
 
       rafRef.current = requestAnimationFrame(frame)
@@ -93,36 +65,26 @@ export default function App() {
 
     rafRef.current = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [theme, strength, motion, reveal])
+  }, [theme, motion])
 
-  const verifyScan = () => {
-    try {
-      const frame =
-        lastFrameRef.current ??
-        canvasRef.current?.getContext('2d', { willReadFrequently: true })?.getImageData(0, 0, SIZE, SIZE)
-
-      if (!frame) {
-        setScanStatus('fail')
-        setScanResult(null)
-        return
-      }
-
-      const code = jsQR(frame.data, frame.width, frame.height, {
-        inversionAttempts: 'attemptBoth',
-      })
-
-      if (code?.data) {
-        setScanResult(code.data)
-        setScanStatus('ok')
-      } else {
-        setScanResult(null)
-        setScanStatus('fail')
-      }
-    } catch (err) {
-      console.error('Scan failed', err)
+  const readFrame = (imageData: ImageData) => {
+    const found = extractPayload(imageData)
+    if (found != null) {
+      setScanResult(found)
+      setScanStatus('ok')
+    } else {
       setScanResult(null)
       setScanStatus('fail')
     }
+  }
+
+  const scanFrame = () => {
+    const frame = lastFrameRef.current
+    if (!frame) {
+      setScanStatus('fail')
+      return
+    }
+    readFrame(frame)
   }
 
   const downloadPng = () => {
@@ -134,6 +96,27 @@ export default function App() {
     a.click()
   }
 
+  const onUpload = (file: File | undefined) => {
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const cctx = c.getContext('2d', { willReadFrequently: true })
+      if (!cctx) return
+      cctx.drawImage(img, 0, 0)
+      readFrame(cctx.getImageData(0, 0, c.width, c.height))
+      URL.revokeObjectURL(url)
+    }
+    img.onerror = () => {
+      setScanStatus('fail')
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }
+
   const activeTheme = THEMES.find((t) => t.id === theme)!
 
   return (
@@ -142,11 +125,11 @@ export default function App() {
 
       <header className="top">
         <p className="brand">VEIL</p>
-        <p className="tag">Art that scans</p>
+        <p className="tag">Images that carry secrets</p>
       </header>
 
       <main className="stage">
-        <section className="hero-visual" aria-label="Engraved QR preview">
+        <section className="hero-visual" aria-label="Living art preview">
           <canvas ref={canvasRef} width={SIZE} height={SIZE} className="art-canvas" />
           <div className="visual-meta">
             <span>{activeTheme.name}</span>
@@ -155,17 +138,18 @@ export default function App() {
         </section>
 
         <section className="controls" aria-label="Controls">
-          <h1>Hide a QR inside moving art</h1>
+          <h1>An image that acts like a QR</h1>
           <p className="lede">
-            The code is engraved into luminance — your eyes see a painting, your phone still reads it.
+            No grid. No black squares. Just art — with your link invisible inside the pixels.
+            Scan with VEIL to reveal it.
           </p>
 
           <label className="field">
-            <span>What should it unlock?</span>
+            <span>Hidden message / URL</span>
             <input
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
-              placeholder="URL, text, Wi‑Fi payload…"
+              placeholder="URL, text, anything…"
               spellCheck={false}
             />
           </label>
@@ -186,70 +170,60 @@ export default function App() {
             ))}
           </div>
 
-          <label className="field slider">
-            <span>
-              Engrave depth <em>{Math.round(strength * 100)}%</em>
-            </span>
-            <input
-              type="range"
-              min={0.4}
-              max={0.95}
-              step={0.01}
-              value={strength}
-              onChange={(e) => setStrength(Number(e.target.value))}
-            />
-            <small>Lower = more invisible. Higher = easier to scan.</small>
-          </label>
-
           <div className="toggles">
             <label className="check">
               <input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} />
               Motion
             </label>
-            <label className="check">
-              <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} />
-              Reveal modules
-            </label>
           </div>
 
           <div className="actions">
-            <button type="button" className="primary" onClick={verifyScan}>
+            <button type="button" className="primary" onClick={scanFrame}>
               Scan this frame
             </button>
             <button type="button" className="ghost" onClick={downloadPng}>
               Download PNG
             </button>
+            <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
+              Scan a PNG
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/webp"
+              hidden
+              onChange={(e) => onUpload(e.target.files?.[0])}
+            />
           </div>
 
           {scanStatus === 'ok' && (
             <p className="scan ok" role="status" data-testid="scan-ok">
-              Scanned: <code>{scanResult}</code>
+              Unlocked: <code>{scanResult}</code>
             </p>
           )}
           {scanStatus === 'fail' && (
             <p className="scan fail" role="status" data-testid="scan-fail">
-              No QR found — raise Engrave depth a bit and try a still frame.
+              No hidden message found. Use a PNG downloaded from VEIL (not a screenshot/JPEG).
             </p>
           )}
 
           <details className="howto">
-            <summary>How this works</summary>
+            <summary>How this is different from a QR</summary>
             <ol>
-              <li>A high–error-correction QR matrix is generated from your text.</li>
-              <li>Art is painted every frame (stars, brush strokes, rain…).</li>
+              <li>A normal QR is a visible black-and-white pattern phones recognize.</li>
               <li>
-                Each QR module gently darkens or lightens that patch of the image — like an engraving —
-                so the pattern exists in brightness, not as a black grid.
+                VEIL paints pure art, then quietly flips the least-significant bits of pixels to store
+                your message — invisible, but recoverable.
               </li>
-              <li>Corner finders stay a bit stronger so phone cameras can lock on.</li>
-              <li>Point any QR scanner at the image (pause motion if needed).</li>
+              <li>Phone QR apps will not see anything. Scan here, or reopen a downloaded PNG in VEIL.</li>
+              <li>Keep files as PNG/WebP. Screenshots and JPEG recompression destroy the hidden bits.</li>
             </ol>
           </details>
         </section>
       </main>
 
       <footer className="foot">
-        <span>VEIL · artistic QR engraver</span>
+        <span>VEIL · image-as-code</span>
       </footer>
     </div>
   )

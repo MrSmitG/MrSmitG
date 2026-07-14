@@ -1,18 +1,18 @@
-# VEIL — Art that scans
+# VEIL — an image that acts like a QR
 
-Hide a real QR code inside a small painting or motion scene. The code is **engraved into brightness**, so your eyes see art and a phone camera still reads the payload.
+Not a decorated QR code. **The picture itself carries the message.**
 
-## Idea
+You see a painting or a car flying through space. Someone else opens that image in VEIL and unlocks the hidden URL/text. There is no scannable black grid.
 
-Normal QR codes are loud black-and-white grids. VEIL:
+## How
 
-1. Generates a high–error-correction QR matrix from your URL/text
-2. Paints a live scene (car through space, oil canvas, neon rain, coral reef)
-3. Gently darkens / lightens each module region so the pattern lives in luminance
-4. Keeps corner finders a bit stronger so scanners can lock on
-5. Animates the art while re-applying the engraving every frame
+1. Pick art + motion theme
+2. Enter a URL or message
+3. VEIL embeds it into pixel LSBs (invisible steganography)
+4. Download a PNG, or hit **Scan this frame**
+5. Later: **Scan a PNG** to unlock the same message
 
-Scanning works with any standard QR reader (and the in-app **Scan this frame** button uses `jsQR`).
+Phone camera QR apps will **not** read these images — that’s intentional. The image isn’t a QR; it only behaves like one inside VEIL.
 
 ## Run
 
@@ -22,32 +22,17 @@ npm install
 npm run dev
 ```
 
-Build:
+## Important
 
-```bash
-npm run build
-npm run preview
-```
+- Save / share as **PNG** (or lossless WebP)
+- Screenshots and JPEG recompression strip the hidden bits
+- Keep messages under ~2KB
 
-## Tips for reliable scans
-
-- Start around **60–70%** engrave depth, then lower for a more invisible look
-- Pause **Motion** if your phone struggles mid-animation
-- Prefer shorter URLs / payloads (smaller QR = larger modules = easier blend)
-- Download a PNG and open it full-screen on another device to test
-
-## Project layout
+## Layout
 
 ```
 src/
-  App.tsx           UI + live canvas loop
-  lib/qr.ts         QR matrix + protected modules
-  lib/engrave.ts    Luminance engraving engine
-  lib/themes.ts     Procedural art themes + motion
+  App.tsx           UI + live canvas
+  lib/stego.ts      Invisible embed / extract
+  lib/themes.ts     Motion art themes
 ```
-
-## Going further
-
-- Upload your own photo and engrave into it
-- Export short WebM / GIF loops
-- AI-generated backgrounds with the same luminance constraints (ControlNet / QR monster style pipelines)
