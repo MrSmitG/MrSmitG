@@ -1,366 +1,50 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { embedPayload, extractPayload } from './lib/stego'
-import { drawVeilMark } from './lib/mark'
-import { buildUpiUri, isValidVpa, parseUpiUri, type UpiDetails } from './lib/upi'
-import { THEMES, drawTheme, type ThemeId } from './lib/themes'
+import { useState } from 'react'
+import BottomNav, { type Tab } from './components/BottomNav'
+import PaySheet, { type PayTarget } from './components/PaySheet'
+import Home from './screens/Home'
+import PayScreen from './screens/PayScreen'
+import Activity from './screens/Activity'
+import Profile from './screens/Profile'
 import './App.css'
 
-const SIZE = 512
-
-type Mode = 'link' | 'pay'
-
 export default function App() {
-  const [mode, setMode] = useState<Mode>('link')
-  const [linkText, setLinkText] = useState('https://github.com/MrSmitG')
-  const [pay, setPay] = useState<UpiDetails>({
-    payeeName: 'Smit Gaikwad',
-    vpa: 'smit@upi',
-    amount: '199',
-    note: 'VEIL payment',
-  })
-
-  const [theme, setTheme] = useState<ThemeId>('midnight-drive')
-  const [motion, setMotion] = useState(true)
-  const [showMark, setShowMark] = useState(true)
-  const [scanResult, setScanResult] = useState<string | null>(null)
-  const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'fail'>('idle')
-
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const artRef = useRef<HTMLCanvasElement | null>(null)
-  const timeRef = useRef(0)
-  const rafRef = useRef(0)
-  const lastFrameRef = useRef<ImageData | null>(null)
-  const payloadRef = useRef('')
-  const showMarkRef = useRef(showMark)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  // The actual bytes hidden in the image, derived from the current mode.
-  const payload = useMemo(() => {
-    if (mode === 'pay') return buildUpiUri(pay)
-    return linkText
-  }, [mode, linkText, pay])
-
-  const payValid = mode !== 'pay' || isValidVpa(pay.vpa)
-
-  useEffect(() => {
-    payloadRef.current = payload
-    setScanStatus('idle')
-    setScanResult(null)
-  }, [payload])
-
-  useEffect(() => {
-    showMarkRef.current = showMark
-  }, [showMark])
-
-  useEffect(() => {
-    if (!artRef.current) {
-      artRef.current = document.createElement('canvas')
-      artRef.current.width = SIZE
-      artRef.current.height = SIZE
-    }
-
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    const art = artRef.current
-    const artCtx = art.getContext('2d', { willReadFrequently: true })
-    if (!ctx || !artCtx) return
-
-    let last = performance.now()
-
-    const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000)
-      last = now
-      if (motion) timeRef.current += dt
-
-      artCtx.clearRect(0, 0, SIZE, SIZE)
-      drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
-      if (showMarkRef.current) {
-        drawVeilMark(artCtx, SIZE, SIZE, timeRef.current)
-      }
-
-      const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
-      try {
-        const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
-        ctx.putImageData(hidden, 0, 0)
-        lastFrameRef.current = hidden
-      } catch {
-        ctx.putImageData(raw, 0, 0)
-        lastFrameRef.current = raw
-      }
-
-      rafRef.current = requestAnimationFrame(frame)
-    }
-
-    rafRef.current = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [theme, motion])
-
-  const readFrame = (imageData: ImageData) => {
-    const found = extractPayload(imageData)
-    if (found != null) {
-      setScanResult(found)
-      setScanStatus('ok')
-    } else {
-      setScanResult(null)
-      setScanStatus('fail')
-    }
-  }
-
-  const scanFrame = () => {
-    const frame = lastFrameRef.current
-    if (!frame) {
-      setScanStatus('fail')
-      return
-    }
-    readFrame(frame)
-  }
-
-  const downloadPng = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `veil-${mode}-${theme}.png`
-    a.click()
-  }
-
-  const onUpload = (file: File | undefined) => {
-    if (!file) return
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      const c = document.createElement('canvas')
-      c.width = img.naturalWidth
-      c.height = img.naturalHeight
-      const cctx = c.getContext('2d', { willReadFrequently: true })
-      if (!cctx) return
-      cctx.drawImage(img, 0, 0)
-      readFrame(cctx.getImageData(0, 0, c.width, c.height))
-      URL.revokeObjectURL(url)
-    }
-    img.onerror = () => {
-      setScanStatus('fail')
-      URL.revokeObjectURL(url)
-    }
-    img.src = url
-  }
-
-  const activeTheme = THEMES.find((t) => t.id === theme)!
-  const scannedUpi = scanResult ? parseUpiUri(scanResult) : null
+  const [tab, setTab] = useState<Tab>('home')
+  const [payTarget, setPayTarget] = useState<PayTarget | null>(null)
 
   return (
-    <div className="page">
-      <div className="atmosphere" aria-hidden />
+    <div className="app-bg">
+      <div className="phone">
+        <div className="status-bar">
+          <span>VEIL Pay</span>
+          <span className="dot-live" aria-hidden />
+        </div>
 
-      <header className="top">
-        <p className="brand">VEIL</p>
-        <p className="tag">Images that carry secrets</p>
-      </header>
-
-      <main className="stage">
-        <section className="hero-visual" aria-label="Living art preview">
-          <canvas ref={canvasRef} width={SIZE} height={SIZE} className="art-canvas" />
-          <div className="visual-meta">
-            <span>{activeTheme.name}</span>
-            <span className={motion ? 'live' : ''}>{motion ? 'In motion' : 'Still'}</span>
-          </div>
-        </section>
-
-        <section className="controls" aria-label="Controls">
-          <h1>An image that acts like a QR</h1>
-          <p className="lede">
-            No grid. No black squares. Hide a link — or your UPI payment details — invisibly inside
-            art. Scan with VEIL to reveal and pay.
-          </p>
-
-          <div className="mode-switch" role="tablist" aria-label="What to hide">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'link'}
-              className={mode === 'link' ? 'mode on' : 'mode'}
-              onClick={() => setMode('link')}
-            >
-              Link / Text
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'pay'}
-              className={mode === 'pay' ? 'mode on' : 'mode'}
-              onClick={() => setMode('pay')}
-            >
-              UPI Payment
-            </button>
-          </div>
-
-          {mode === 'link' ? (
-            <label className="field">
-              <span>Hidden message / URL</span>
-              <input
-                value={linkText}
-                onChange={(e) => setLinkText(e.target.value)}
-                placeholder="URL, text, anything…"
-                spellCheck={false}
-              />
-            </label>
-          ) : (
-            <div className="pay-fields">
-              <label className="field">
-                <span>Payee name</span>
-                <input
-                  value={pay.payeeName}
-                  onChange={(e) => setPay({ ...pay, payeeName: e.target.value })}
-                  placeholder="Who gets paid"
-                />
-              </label>
-              <label className="field">
-                <span>UPI ID (VPA)</span>
-                <input
-                  value={pay.vpa}
-                  onChange={(e) => setPay({ ...pay, vpa: e.target.value })}
-                  placeholder="name@bank"
-                  spellCheck={false}
-                  aria-invalid={!payValid}
-                />
-                {!payValid && <small className="err">Enter a valid UPI ID like name@bank</small>}
-              </label>
-              <div className="field-row">
-                <label className="field">
-                  <span>Amount (₹)</span>
-                  <input
-                    value={pay.amount ?? ''}
-                    onChange={(e) => setPay({ ...pay, amount: e.target.value })}
-                    placeholder="optional"
-                    inputMode="decimal"
-                  />
-                </label>
-                <label className="field">
-                  <span>Note</span>
-                  <input
-                    value={pay.note ?? ''}
-                    onChange={(e) => setPay({ ...pay, note: e.target.value })}
-                    placeholder="optional"
-                  />
-                </label>
-              </div>
-            </div>
-          )}
-
-          <div className="theme-grid" role="listbox" aria-label="Art themes">
-            {THEMES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="option"
-                aria-selected={theme === t.id}
-                className={theme === t.id ? 'theme on' : 'theme'}
-                onClick={() => setTheme(t.id)}
-              >
-                <strong>{t.name}</strong>
-                <span>{t.blurb}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="toggles">
-            <label className="check">
-              <input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} />
-              Motion
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={showMark}
-                onChange={(e) => setShowMark(e.target.checked)}
-              />
-              VEIL mark
-            </label>
-          </div>
-
-          <div className="actions">
-            <button type="button" className="primary" onClick={scanFrame}>
-              Scan this frame
-            </button>
-            <button type="button" className="ghost" onClick={downloadPng}>
-              Download PNG
-            </button>
-            <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
-              Scan a PNG
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/webp"
-              hidden
-              onChange={(e) => onUpload(e.target.files?.[0])}
+        <main className="app-scroll">
+          {tab === 'home' && (
+            <Home
+              onPay={(t) => setPayTarget(t)}
+              onScan={() => setTab('pay')}
+              onSeeAll={() => setTab('activity')}
             />
-          </div>
-
-          {scanStatus === 'ok' && scannedUpi && (
-            <div className="pay-card" role="status" data-testid="scan-pay">
-              <div className="pay-card-head">
-                <span className="verified">✓ VEIL verified</span>
-                <span className="pay-tag">UPI payment</span>
-              </div>
-              <div className="pay-avatar" aria-hidden>
-                {(scannedUpi.payeeName || scannedUpi.vpa).slice(0, 1).toUpperCase()}
-              </div>
-              <p className="pay-to">Pay to</p>
-              <p className="pay-name">{scannedUpi.payeeName || scannedUpi.vpa}</p>
-              <p className="pay-vpa">{scannedUpi.vpa}</p>
-              {scannedUpi.amount && (
-                <p className="pay-amount">₹{scannedUpi.amount}</p>
-              )}
-              {scannedUpi.note && <p className="pay-note">“{scannedUpi.note}”</p>}
-              <a className="pay-btn" href={scanResult!} data-testid="pay-btn">
-                Pay with UPI app
-              </a>
-              <p className="pay-fine">
-                Opens your UPI app (GPay / PhonePe / Paytm) on a phone.
-              </p>
-            </div>
           )}
+          {tab === 'pay' && <PayScreen onPay={(t) => setPayTarget(t)} />}
+          {tab === 'activity' && <Activity />}
+          {tab === 'you' && <Profile />}
+        </main>
 
-          {scanStatus === 'ok' && !scannedUpi && (
-            <p className="scan ok" role="status" data-testid="scan-ok">
-              <span className="verified">✓ VEIL verified</span>
-              Unlocked: <code>{scanResult}</code>
-            </p>
-          )}
-          {scanStatus === 'fail' && (
-            <p className="scan fail" role="status" data-testid="scan-fail">
-              No hidden message found. Use a PNG downloaded from VEIL (not a screenshot/JPEG).
-            </p>
-          )}
+        <BottomNav active={tab} onChange={setTab} />
 
-          <details className="howto">
-            <summary>How this is different from a QR</summary>
-            <ol>
-              <li>A normal QR is a visible black-and-white pattern phones recognize.</li>
-              <li>
-                VEIL paints pure art, then quietly flips the least-significant bits of pixels to store
-                your message — invisible, but recoverable.
-              </li>
-              <li>
-                Every VEIL image starts with a hidden <code>VEIL</code> signature, so scanning instantly
-                knows whether an image is a real VEIL code — anything else reads as “not found”.
-              </li>
-              <li>
-                In <strong>UPI Payment</strong> mode, the hidden data is a standard <code>upi://pay</code>{' '}
-                link. Scanning shows the payee’s details and a Pay button that opens any UPI app.
-              </li>
-              <li>Phone QR apps will not see anything. Scan here, or reopen a downloaded PNG in VEIL.</li>
-              <li>Keep files as PNG/WebP. Screenshots and JPEG recompression destroy the hidden bits.</li>
-            </ol>
-          </details>
-        </section>
-      </main>
-
-      <footer className="foot">
-        <span>VEIL · image-as-code</span>
-      </footer>
+        {payTarget && (
+          <PaySheet
+            target={payTarget}
+            onClose={() => setPayTarget(null)}
+            onDone={() => {
+              setPayTarget(null)
+              setTab('activity')
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }
