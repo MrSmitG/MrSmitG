@@ -1,13 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { embedPayload, extractPayload } from './lib/stego'
 import { drawVeilMark } from './lib/mark'
+import { buildUpiUri, isValidVpa, parseUpiUri, type UpiDetails } from './lib/upi'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
 
 const SIZE = 512
 
+type Mode = 'link' | 'pay'
+
 export default function App() {
-  const [payload, setPayload] = useState('https://github.com/MrSmitG')
+  const [mode, setMode] = useState<Mode>('link')
+  const [linkText, setLinkText] = useState('https://github.com/MrSmitG')
+  const [pay, setPay] = useState<UpiDetails>({
+    payeeName: 'Smit Gaikwad',
+    vpa: 'smit@upi',
+    amount: '199',
+    note: 'VEIL payment',
+  })
+
   const [theme, setTheme] = useState<ThemeId>('midnight-drive')
   const [motion, setMotion] = useState(true)
   const [showMark, setShowMark] = useState(true)
@@ -19,9 +30,17 @@ export default function App() {
   const timeRef = useRef(0)
   const rafRef = useRef(0)
   const lastFrameRef = useRef<ImageData | null>(null)
-  const payloadRef = useRef(payload)
+  const payloadRef = useRef('')
   const showMarkRef = useRef(showMark)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // The actual bytes hidden in the image, derived from the current mode.
+  const payload = useMemo(() => {
+    if (mode === 'pay') return buildUpiUri(pay)
+    return linkText
+  }, [mode, linkText, pay])
+
+  const payValid = mode !== 'pay' || isValidVpa(pay.vpa)
 
   useEffect(() => {
     payloadRef.current = payload
@@ -56,7 +75,6 @@ export default function App() {
 
       artCtx.clearRect(0, 0, SIZE, SIZE)
       drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
-      // Draw the mark before reading pixels so hidden bits sit on top of it
       if (showMarkRef.current) {
         drawVeilMark(artCtx, SIZE, SIZE, timeRef.current)
       }
@@ -103,7 +121,7 @@ export default function App() {
     if (!canvas) return
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
-    a.download = `veil-${theme}.png`
+    a.download = `veil-${mode}-${theme}.png`
     a.click()
   }
 
@@ -129,6 +147,7 @@ export default function App() {
   }
 
   const activeTheme = THEMES.find((t) => t.id === theme)!
+  const scannedUpi = scanResult ? parseUpiUri(scanResult) : null
 
   return (
     <div className="page">
@@ -151,19 +170,83 @@ export default function App() {
         <section className="controls" aria-label="Controls">
           <h1>An image that acts like a QR</h1>
           <p className="lede">
-            No grid. No black squares. Cars, portraits, monuments — with your link invisible inside
-            the pixels. Scan with VEIL to reveal it.
+            No grid. No black squares. Hide a link — or your UPI payment details — invisibly inside
+            art. Scan with VEIL to reveal and pay.
           </p>
 
-          <label className="field">
-            <span>Hidden message / URL</span>
-            <input
-              value={payload}
-              onChange={(e) => setPayload(e.target.value)}
-              placeholder="URL, text, anything…"
-              spellCheck={false}
-            />
-          </label>
+          <div className="mode-switch" role="tablist" aria-label="What to hide">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'link'}
+              className={mode === 'link' ? 'mode on' : 'mode'}
+              onClick={() => setMode('link')}
+            >
+              Link / Text
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'pay'}
+              className={mode === 'pay' ? 'mode on' : 'mode'}
+              onClick={() => setMode('pay')}
+            >
+              UPI Payment
+            </button>
+          </div>
+
+          {mode === 'link' ? (
+            <label className="field">
+              <span>Hidden message / URL</span>
+              <input
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="URL, text, anything…"
+                spellCheck={false}
+              />
+            </label>
+          ) : (
+            <div className="pay-fields">
+              <label className="field">
+                <span>Payee name</span>
+                <input
+                  value={pay.payeeName}
+                  onChange={(e) => setPay({ ...pay, payeeName: e.target.value })}
+                  placeholder="Who gets paid"
+                />
+              </label>
+              <label className="field">
+                <span>UPI ID (VPA)</span>
+                <input
+                  value={pay.vpa}
+                  onChange={(e) => setPay({ ...pay, vpa: e.target.value })}
+                  placeholder="name@bank"
+                  spellCheck={false}
+                  aria-invalid={!payValid}
+                />
+                {!payValid && <small className="err">Enter a valid UPI ID like name@bank</small>}
+              </label>
+              <div className="field-row">
+                <label className="field">
+                  <span>Amount (₹)</span>
+                  <input
+                    value={pay.amount ?? ''}
+                    onChange={(e) => setPay({ ...pay, amount: e.target.value })}
+                    placeholder="optional"
+                    inputMode="decimal"
+                  />
+                </label>
+                <label className="field">
+                  <span>Note</span>
+                  <input
+                    value={pay.note ?? ''}
+                    onChange={(e) => setPay({ ...pay, note: e.target.value })}
+                    placeholder="optional"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="theme-grid" role="listbox" aria-label="Art themes">
             {THEMES.map((t) => (
@@ -196,11 +279,6 @@ export default function App() {
             </label>
           </div>
 
-          <p className="hint">
-            The <strong>VEIL mark</strong> is the little corner badge that tells people this image is
-            scannable in VEIL. The hidden data is always there — the mark just makes it recognizable.
-          </p>
-
           <div className="actions">
             <button type="button" className="primary" onClick={scanFrame}>
               Scan this frame
@@ -220,7 +298,32 @@ export default function App() {
             />
           </div>
 
-          {scanStatus === 'ok' && (
+          {scanStatus === 'ok' && scannedUpi && (
+            <div className="pay-card" role="status" data-testid="scan-pay">
+              <div className="pay-card-head">
+                <span className="verified">✓ VEIL verified</span>
+                <span className="pay-tag">UPI payment</span>
+              </div>
+              <div className="pay-avatar" aria-hidden>
+                {(scannedUpi.payeeName || scannedUpi.vpa).slice(0, 1).toUpperCase()}
+              </div>
+              <p className="pay-to">Pay to</p>
+              <p className="pay-name">{scannedUpi.payeeName || scannedUpi.vpa}</p>
+              <p className="pay-vpa">{scannedUpi.vpa}</p>
+              {scannedUpi.amount && (
+                <p className="pay-amount">₹{scannedUpi.amount}</p>
+              )}
+              {scannedUpi.note && <p className="pay-note">“{scannedUpi.note}”</p>}
+              <a className="pay-btn" href={scanResult!} data-testid="pay-btn">
+                Pay with UPI app
+              </a>
+              <p className="pay-fine">
+                Opens your UPI app (GPay / PhonePe / Paytm) on a phone.
+              </p>
+            </div>
+          )}
+
+          {scanStatus === 'ok' && !scannedUpi && (
             <p className="scan ok" role="status" data-testid="scan-ok">
               <span className="verified">✓ VEIL verified</span>
               Unlocked: <code>{scanResult}</code>
@@ -245,8 +348,8 @@ export default function App() {
                 knows whether an image is a real VEIL code — anything else reads as “not found”.
               </li>
               <li>
-                The optional <strong>VEIL mark</strong> (corner badge) is the human-visible cue that says
-                “scan me in VEIL”. Turn it off for a fully clean image.
+                In <strong>UPI Payment</strong> mode, the hidden data is a standard <code>upi://pay</code>{' '}
+                link. Scanning shows the payee’s details and a Pay button that opens any UPI app.
               </li>
               <li>Phone QR apps will not see anything. Scan here, or reopen a downloaded PNG in VEIL.</li>
               <li>Keep files as PNG/WebP. Screenshots and JPEG recompression destroy the hidden bits.</li>
