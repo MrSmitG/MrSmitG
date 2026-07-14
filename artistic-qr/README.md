@@ -2,17 +2,17 @@
 
 Not a decorated QR code. **The picture itself carries the message.**
 
-You see a painting or a car flying through space. Someone else opens that image in VEIL and unlocks the hidden URL/text. There is no scannable black grid.
+Subjects are limited to **cars, portraits, and secular monuments** — no idols, gods, or religious figures.
 
 ## How
 
-1. Pick art + motion theme
+1. Pick a theme (Midnight Drive, Studio Portrait, Stone Monument, Bridge at Dawn)
 2. Enter a URL or message
 3. VEIL embeds it into pixel LSBs (invisible steganography)
 4. Download a PNG, or hit **Scan this frame**
 5. Later: **Scan a PNG** to unlock the same message
 
-Phone camera QR apps will **not** read these images — that’s intentional. The image isn’t a QR; it only behaves like one inside VEIL.
+Phone camera QR apps will **not** read these images — that’s intentional.
 
 ## Run
 
@@ -34,5 +34,5 @@ npm run dev
 src/
   App.tsx           UI + live canvas
   lib/stego.ts      Invisible embed / extract
-  lib/themes.ts     Motion art themes
+  lib/themes.ts     Car / portrait / monument themes
 ```

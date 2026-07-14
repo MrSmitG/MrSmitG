@@ -7,7 +7,7 @@ const SIZE = 512
 
 export default function App() {
   const [payload, setPayload] = useState('https://github.com/MrSmitG')
-  const [theme, setTheme] = useState<ThemeId>('space-cruise')
+  const [theme, setTheme] = useState<ThemeId>('midnight-drive')
   const [motion, setMotion] = useState(true)
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'fail'>('idle')
@@ -140,8 +140,8 @@ export default function App() {
         <section className="controls" aria-label="Controls">
           <h1>An image that acts like a QR</h1>
           <p className="lede">
-            No grid. No black squares. Just art — with your link invisible inside the pixels.
-            Scan with VEIL to reveal it.
+            No grid. No black squares. Cars, portraits, monuments — with your link invisible inside
+            the pixels. Scan with VEIL to reveal it.
           </p>
 
           <label className="field">
