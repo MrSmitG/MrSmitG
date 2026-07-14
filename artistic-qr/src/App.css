@@ -367,6 +367,31 @@ body {
   font-size: 0.82rem;
 }
 
+.verified {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(126, 200, 192, 0.25);
+  border: 1px solid rgba(126, 200, 192, 0.5);
+  color: #bfeee8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.hint {
+  margin: -0.4rem 0 1.1rem;
+  color: rgba(155, 181, 168, 0.85);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.hint strong {
+  color: var(--fog);
+  font-weight: 600;
+}
+
 .howto {
   border-top: 1px solid var(--line);
   padding-top: 0.85rem;

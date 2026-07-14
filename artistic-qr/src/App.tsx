@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { embedPayload, extractPayload } from './lib/stego'
+import { drawVeilMark } from './lib/mark'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
 
@@ -9,6 +10,7 @@ export default function App() {
   const [payload, setPayload] = useState('https://github.com/MrSmitG')
   const [theme, setTheme] = useState<ThemeId>('midnight-drive')
   const [motion, setMotion] = useState(true)
+  const [showMark, setShowMark] = useState(true)
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'fail'>('idle')
 
@@ -18,6 +20,7 @@ export default function App() {
   const rafRef = useRef(0)
   const lastFrameRef = useRef<ImageData | null>(null)
   const payloadRef = useRef(payload)
+  const showMarkRef = useRef(showMark)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -25,6 +28,10 @@ export default function App() {
     setScanStatus('idle')
     setScanResult(null)
   }, [payload])
+
+  useEffect(() => {
+    showMarkRef.current = showMark
+  }, [showMark])
 
   useEffect(() => {
     if (!artRef.current) {
@@ -49,6 +56,10 @@ export default function App() {
 
       artCtx.clearRect(0, 0, SIZE, SIZE)
       drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
+      // Draw the mark before reading pixels so hidden bits sit on top of it
+      if (showMarkRef.current) {
+        drawVeilMark(artCtx, SIZE, SIZE, timeRef.current)
+      }
 
       const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
       try {
@@ -175,7 +186,20 @@ export default function App() {
               <input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} />
               Motion
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={showMark}
+                onChange={(e) => setShowMark(e.target.checked)}
+              />
+              VEIL mark
+            </label>
           </div>
+
+          <p className="hint">
+            The <strong>VEIL mark</strong> is the little corner badge that tells people this image is
+            scannable in VEIL. The hidden data is always there — the mark just makes it recognizable.
+          </p>
 
           <div className="actions">
             <button type="button" className="primary" onClick={scanFrame}>
@@ -198,6 +222,7 @@ export default function App() {
 
           {scanStatus === 'ok' && (
             <p className="scan ok" role="status" data-testid="scan-ok">
+              <span className="verified">✓ VEIL verified</span>
               Unlocked: <code>{scanResult}</code>
             </p>
           )}
@@ -214,6 +239,14 @@ export default function App() {
               <li>
                 VEIL paints pure art, then quietly flips the least-significant bits of pixels to store
                 your message — invisible, but recoverable.
+              </li>
+              <li>
+                Every VEIL image starts with a hidden <code>VEIL</code> signature, so scanning instantly
+                knows whether an image is a real VEIL code — anything else reads as “not found”.
+              </li>
+              <li>
+                The optional <strong>VEIL mark</strong> (corner badge) is the human-visible cue that says
+                “scan me in VEIL”. Turn it off for a fully clean image.
               </li>
               <li>Phone QR apps will not see anything. Scan here, or reopen a downloaded PNG in VEIL.</li>
               <li>Keep files as PNG/WebP. Screenshots and JPEG recompression destroy the hidden bits.</li>
