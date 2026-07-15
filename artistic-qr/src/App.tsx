@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { hasExpectedImageDimensions } from './lib/image-file'
 import { embedPayload, extractPayload } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
@@ -96,21 +97,47 @@ export default function App() {
     a.click()
   }
 
-  const onUpload = (file: File | undefined) => {
+  const onUpload = async (file: File | undefined) => {
     if (!file) return
+    const hasExpectedDimensions = await hasExpectedImageDimensions(file, SIZE, SIZE).catch(
+      () => false,
+    )
+    if (!hasExpectedDimensions) {
+      setScanResult(null)
+      setScanStatus('fail')
+      return
+    }
+
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
-      const c = document.createElement('canvas')
-      c.width = img.naturalWidth
-      c.height = img.naturalHeight
-      const cctx = c.getContext('2d', { willReadFrequently: true })
-      if (!cctx) return
-      cctx.drawImage(img, 0, 0)
-      readFrame(cctx.getImageData(0, 0, c.width, c.height))
-      URL.revokeObjectURL(url)
+      try {
+        if (img.naturalWidth !== SIZE || img.naturalHeight !== SIZE) {
+          setScanResult(null)
+          setScanStatus('fail')
+          return
+        }
+
+        const c = document.createElement('canvas')
+        c.width = SIZE
+        c.height = SIZE
+        const cctx = c.getContext('2d', { willReadFrequently: true })
+        if (!cctx) {
+          setScanResult(null)
+          setScanStatus('fail')
+          return
+        }
+        cctx.drawImage(img, 0, 0)
+        readFrame(cctx.getImageData(0, 0, SIZE, SIZE))
+      } catch {
+        setScanResult(null)
+        setScanStatus('fail')
+      } finally {
+        URL.revokeObjectURL(url)
+      }
     }
     img.onerror = () => {
+      setScanResult(null)
       setScanStatus('fail')
       URL.revokeObjectURL(url)
     }
@@ -192,7 +219,7 @@ export default function App() {
               type="file"
               accept="image/png,image/webp"
               hidden
-              onChange={(e) => onUpload(e.target.files?.[0])}
+              onChange={(e) => void onUpload(e.target.files?.[0])}
             />
           </div>
 
