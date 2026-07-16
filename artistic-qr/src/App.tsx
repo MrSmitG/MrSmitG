@@ -20,6 +20,36 @@ export default function App() {
   const payloadRef = useRef(payload)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const paintPayload = (
+    ctx: CanvasRenderingContext2D,
+    raw: ImageData,
+    nextPayload: string,
+  ) => {
+    try {
+      const hidden = embedPayload(raw, nextPayload.trim() || ' ')
+      ctx.putImageData(hidden, 0, 0)
+      lastFrameRef.current = hidden
+    } catch {
+      ctx.putImageData(raw, 0, 0)
+      lastFrameRef.current = raw
+    }
+  }
+
+  const updatePayload = (nextPayload: string) => {
+    // Keep export and scan in sync even before the next animation frame.
+    payloadRef.current = nextPayload
+
+    const canvas = canvasRef.current
+    const art = artRef.current
+    const ctx = canvas?.getContext('2d', { willReadFrequently: true })
+    const artCtx = art?.getContext('2d', { willReadFrequently: true })
+    if (ctx && artCtx) {
+      paintPayload(ctx, artCtx.getImageData(0, 0, SIZE, SIZE), nextPayload)
+    }
+
+    setPayload(nextPayload)
+  }
+
   useEffect(() => {
     payloadRef.current = payload
     setScanStatus('idle')
@@ -51,14 +81,7 @@ export default function App() {
       drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
 
       const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
-      try {
-        const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
-        ctx.putImageData(hidden, 0, 0)
-        lastFrameRef.current = hidden
-      } catch {
-        ctx.putImageData(raw, 0, 0)
-        lastFrameRef.current = raw
-      }
+      paintPayload(ctx, raw, payloadRef.current)
 
       rafRef.current = requestAnimationFrame(frame)
     }
@@ -148,7 +171,7 @@ export default function App() {
             <span>Hidden message / URL</span>
             <input
               value={payload}
-              onChange={(e) => setPayload(e.target.value)}
+              onChange={(e) => updatePayload(e.target.value)}
               placeholder="URL, text, anything…"
               spellCheck={false}
             />
