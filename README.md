@@ -11,6 +11,8 @@
 
 - 🌱 I’m currently learning **Java**
 
+- ⚔️ Play **[The Odyssey — Journey Home](odyssey/index.html)** — a browser adventure inspired by Homer & Nolan’s epic
+
 - 👨‍💻 All of my projects are available at [https://github.com/MrSmitG?tab=projects&type=beta](https://github.com/MrSmitG?tab=projects&type=beta)
 
 - 📝 I regularly write articles on [https://www.linkedin.com/in/mr-smit-gaikwad/](https://www.linkedin.com/in/mr-smit-gaikwad/)

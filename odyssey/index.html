@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Odyssey — Journey Home</title>
+  <meta name="description" content="Play as Odysseus. Sail the wine-dark sea, face gods and monsters, and find your way home to Ithaca." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Landing / Title -->
+    <section id="screen-title" class="screen screen--title active">
+      <div class="sea-bg" aria-hidden="true">
+        <canvas id="title-canvas"></canvas>
+      </div>
+      <div class="title-content">
+        <p class="brand">The Odyssey</p>
+        <h1 class="headline">Find your way home</h1>
+        <p class="tagline">After Troy, the sea remembers every sin. Sail as Odysseus through gods, monsters, and memory — until Ithaca answers.</p>
+        <div class="cta-row">
+          <button type="button" id="btn-play" class="btn btn--primary">Begin the Journey</button>
+          <button type="button" id="btn-how" class="btn btn--ghost">How to Play</button>
+        </div>
+      </div>
+      <p class="credit">Inspired by Homer &amp; the epic spirit of Nolan’s Odyssey</p>
+    </section>
+
+    <!-- How to play -->
+    <section id="screen-how" class="screen screen--modal">
+      <div class="modal">
+        <h2>How to Play</h2>
+        <ul class="howto">
+          <li><kbd>WASD</kbd> or <kbd>Arrows</kbd> — Move Odysseus</li>
+          <li><kbd>E</kbd> or <kbd>Enter</kbd> — Talk / Interact / Advance dialogue</li>
+          <li><kbd>Space</kbd> — Strike with your bronze blade</li>
+          <li><kbd>Esc</kbd> — Pause</li>
+        </ul>
+        <p class="modal-note">Each island is a chapter. Listen to Athena. Survive Poseidon’s wrath. Return to Penelope.</p>
+        <button type="button" id="btn-how-close" class="btn btn--primary">Understood</button>
+      </div>
+    </section>
+
+    <!-- Chapter select / intro -->
+    <section id="screen-chapter" class="screen screen--chapter">
+      <div class="chapter-card">
+        <p class="chapter-label" id="chapter-label">Chapter I</p>
+        <h2 id="chapter-title">The Wine-Dark Sea</h2>
+        <p id="chapter-blurb" class="chapter-blurb"></p>
+        <button type="button" id="btn-start-chapter" class="btn btn--primary">Set Sail</button>
+      </div>
+    </section>
+
+    <!-- Game -->
+    <section id="screen-game" class="screen screen--game">
+      <div class="hud">
+        <div class="hud-left">
+          <span class="hud-brand">The Odyssey</span>
+          <span class="hud-chapter" id="hud-chapter">Chapter I</span>
+        </div>
+        <div class="hud-center">
+          <div class="stat">
+            <span class="stat-label">Fate</span>
+            <div class="bar"><div id="bar-hp" class="bar-fill bar-fill--hp"></div></div>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Crew</span>
+            <div class="bar"><div id="bar-crew" class="bar-fill bar-fill--crew"></div></div>
+          </div>
+        </div>
+        <div class="hud-right">
+          <span id="hud-objective" class="objective">Speak with Athena</span>
+          <button type="button" id="btn-pause" class="btn btn--tiny">Pause</button>
+        </div>
+      </div>
+      <canvas id="game" width="1280" height="720"></canvas>
+      <div id="dialogue" class="dialogue hidden">
+        <div class="dialogue-speaker" id="dlg-speaker"></div>
+        <p class="dialogue-text" id="dlg-text"></p>
+        <p class="dialogue-hint">Press E to continue</p>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+      <div id="touch" class="touch" aria-hidden="true">
+        <div class="touch-pad" id="touch-pad">
+          <button type="button" data-dir="up" class="touch-btn">▲</button>
+          <div class="touch-mid">
+            <button type="button" data-dir="left" class="touch-btn">◀</button>
+            <button type="button" data-dir="right" class="touch-btn">▶</button>
+          </div>
+          <button type="button" data-dir="down" class="touch-btn">▼</button>
+        </div>
+        <div class="touch-actions">
+          <button type="button" id="touch-attack" class="touch-action">Strike</button>
+          <button type="button" id="touch-interact" class="touch-action touch-action--gold">Talk</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pause -->
+    <section id="screen-pause" class="screen screen--modal">
+      <div class="modal">
+        <h2>Paused</h2>
+        <p class="modal-note">The wine-dark sea waits.</p>
+        <div class="cta-col">
+          <button type="button" id="btn-resume" class="btn btn--primary">Resume</button>
+          <button type="button" id="btn-restart" class="btn btn--ghost">Restart Chapter</button>
+          <button type="button" id="btn-title" class="btn btn--ghost">Return to Title</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ending -->
+    <section id="screen-ending" class="screen screen--ending">
+      <div class="ending-content">
+        <p class="brand">The Odyssey</p>
+        <h2 id="ending-title">Home</h2>
+        <p id="ending-text" class="ending-text"></p>
+        <button type="button" id="btn-replay" class="btn btn--primary">Sail Again</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/story.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
