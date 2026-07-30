@@ -1,4 +1,4 @@
-export type ProviderKind = 'ollama' | 'lmstudio' | 'openai-compatible'
+export type ProviderKind = 'ollama' | 'lmstudio' | 'openai-compatible' | 'demo'
 export type AgentMode = 'ask' | 'edit' | 'agent'
 
 export interface AppConfig {

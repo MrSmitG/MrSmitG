@@ -7,3 +7,5 @@ dist
 .local-forge
 workspace-data
 coverage
+*.tsbuildinfo
+demo-workspace

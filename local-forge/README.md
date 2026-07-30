@@ -40,6 +40,10 @@ Start the local server (default `http://127.0.0.1:1234/v1`).
 
 Any OpenAI-compatible `/v1/chat/completions` endpoint.
 
+**Option D — Demo provider**
+
+LocalForge ships with a `demo` provider so you can explore the UI without a GPU or model download. Switch to Ollama in Model Hub for real inference.
+
 ### 2. Run LocalForge
 
 ```bash

@@ -186,6 +186,17 @@ export async function checkProviderHealth(config: AppConfig): Promise<{
 }
 
 export async function listInstalledModels(config: AppConfig): Promise<LocalModel[]> {
+  if (config.provider === 'demo') {
+    return [
+      {
+        id: 'demo-coder',
+        name: 'demo-coder',
+        source: 'catalog',
+        installed: true,
+      },
+    ]
+  }
+
   if (config.provider === 'ollama') {
     const res = await fetch(`${ollamaRoot(config)}/api/tags`, {
       headers: authHeaders(config),
@@ -253,6 +264,42 @@ export function listLocalDiskModels(modelsPath: string): LocalModel[] {
   return entries
 }
 
+function demoReply(messages: Array<{ role: string; content: string }>): string {
+  const last = messages.filter((m) => m.role === 'user').at(-1)?.content ?? ''
+  const request = last.includes('User request:')
+    ? last.slice(last.indexOf('User request:') + 'User request:'.length).trim()
+    : last
+  const wantsEdit = /^(.*\b)?(edit|refactor|rename|implement|fix|add|create|apply)\b/i.test(
+    request.split('\n')[0] ?? request,
+  ) || /\binline edit\b/i.test(request)
+  if (wantsEdit) {
+    return `Sure — here is a focused local edit demo:
+
+\`\`\`path=src/main.ts
+export function welcome(name: string): string {
+  return \`Welcome, \${name}!\`
+}
+
+export function sum(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0)
+}
+
+if (import.meta.main) {
+  console.log(welcome('LocalForge'))
+  console.log('sum', sum([1, 2, 3, 4]))
+}
+\`\`\`
+
+This ran on the **demo** provider (no GPU required). Switch to Ollama in Model Hub to use a real local model.`
+  }
+  return `I'm **LocalForge** running in **demo** mode.
+
+Your request:
+> ${request.slice(0, 400)}
+
+Connect **Ollama** or **LM Studio** in Model Hub, download a coding model to your chosen folder, and select it for real local inference. Demo mode is only for UI/agent-flow testing.`
+}
+
 export async function chatCompletion(
   config: AppConfig,
   body: {
@@ -263,7 +310,28 @@ export async function chatCompletion(
   },
 ): Promise<Response> {
   const model = body.model || config.selectedModel
-  if (!model) throw new Error('No model selected. Open Model Hub and choose or download one.')
+  if (!model && config.provider !== 'demo') {
+    throw new Error('No model selected. Open Model Hub and choose or download one.')
+  }
+
+  if (config.provider === 'demo') {
+    const text = demoReply(body.messages)
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        // Emit OpenAI-style SSE chunks so the server can reuse one parser path via native ollama format
+        const words = text.split(/(\s+)/)
+        for (const w of words) {
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ message: { content: w }, done: false }) + '\n'),
+          )
+        }
+        controller.enqueue(encoder.encode(JSON.stringify({ message: { content: '' }, done: true }) + '\n'))
+        controller.close()
+      },
+    })
+    return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson' } })
+  }
 
   if (config.provider === 'ollama' && !config.baseUrl.includes('/v1')) {
     // Native Ollama chat API (better tool-less streaming)

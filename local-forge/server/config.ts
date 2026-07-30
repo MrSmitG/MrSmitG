@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const CONFIG_PATH = join(ROOT, '.local-forge', 'config.json')
 
-export type ProviderKind = 'ollama' | 'lmstudio' | 'openai-compatible'
+export type ProviderKind = 'ollama' | 'lmstudio' | 'openai-compatible' | 'demo'
 
 export interface AppConfig {
   provider: ProviderKind
@@ -21,10 +21,10 @@ export interface AppConfig {
 }
 
 const DEFAULTS: AppConfig = {
-  provider: 'ollama',
-  baseUrl: 'http://127.0.0.1:11434',
+  provider: 'demo',
+  baseUrl: 'local://demo',
   apiKey: '',
-  selectedModel: '',
+  selectedModel: 'demo-coder',
   modelsPath: join(homedir(), '.local-forge', 'models'),
   workspacePath: join(ROOT, 'demo-workspace'),
   temperature: 0.2,
@@ -67,5 +67,7 @@ export function providerDefaults(kind: ProviderKind): Pick<AppConfig, 'baseUrl' 
       return { baseUrl: 'http://127.0.0.1:1234/v1', apiKey: 'lm-studio' }
     case 'openai-compatible':
       return { baseUrl: 'http://127.0.0.1:8080/v1', apiKey: '' }
+    case 'demo':
+      return { baseUrl: 'local://demo', apiKey: '' }
   }
 }

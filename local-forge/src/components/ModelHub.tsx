@@ -137,11 +137,13 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
                 if (p === 'ollama') setBaseUrl('http://127.0.0.1:11434')
                 if (p === 'lmstudio') setBaseUrl('http://127.0.0.1:1234/v1')
                 if (p === 'openai-compatible') setBaseUrl('http://127.0.0.1:8080/v1')
+                if (p === 'demo') setBaseUrl('local://demo')
               }}
             >
-              <option value="ollama">Ollama</option>
+              <option value="ollama">Ollama (download + run)</option>
               <option value="lmstudio">LM Studio</option>
               <option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, …)</option>
+              <option value="demo">Demo (offline UI preview)</option>
             </select>
           </div>
 

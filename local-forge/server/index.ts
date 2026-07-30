@@ -68,6 +68,9 @@ app.put('/api/config', (req, res) => {
   if (body.provider && !body.baseUrl) {
     Object.assign(patch, providerDefaults(body.provider))
   }
+  if (body.provider === 'demo' && !body.selectedModel) {
+    patch.selectedModel = 'demo-coder'
+  }
   const next = saveConfig(patch)
   seedDemoWorkspace(next.workspacePath)
   ensureModelsPath(next.modelsPath)
@@ -270,7 +273,10 @@ app.post('/api/chat', async (req, res) => {
       if (done) break
       buffer += decoder.decode(value, { stream: true })
 
-      if (config.provider === 'ollama' && !config.baseUrl.includes('/v1')) {
+      if (
+        (config.provider === 'ollama' && !config.baseUrl.includes('/v1')) ||
+        config.provider === 'demo'
+      ) {
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
         for (const line of lines) {
