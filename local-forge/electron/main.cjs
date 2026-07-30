@@ -100,6 +100,14 @@ function createWindow() {
   mainWindow.loadURL(target)
   mainWindow.once('ready-to-show', () => mainWindow?.show())
 
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[window] failed to load ${url}: ${code} ${desc}`)
+    if (isDev && url.startsWith(DEV_UI)) {
+      // Last resort: open API landing (redirects to Vite) instead of a blank error page.
+      setTimeout(() => mainWindow?.loadURL(serverUrl() + '/'), 800)
+    }
+  })
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }

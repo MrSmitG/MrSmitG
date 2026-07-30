@@ -696,10 +696,47 @@ app.post('/api/edits/preview', (req, res) => {
 })
 
 const dist = join(ROOT, 'dist')
-if (process.env.NODE_ENV === 'production' && existsSync(dist)) {
+const UI_DEV = process.env.LOCALFORGE_DEV_UI || 'http://127.0.0.1:5173'
+
+function sendDevLanding(res: express.Response) {
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0;url=${UI_DEV}/" />
+  <title>LocalForge</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background:#071411; color:#e8f2ee;
+      display:grid; place-items:center; min-height:100vh; margin:0; }
+    a { color:#e8c468; }
+    .card { max-width:420px; padding:28px; border:1px solid #1f3d34; border-radius:12px;
+      background:#0c1c18; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 style="margin:0 0 8px;font-size:1.4rem;">LocalForge API</h1>
+    <p>This is the API port (<code>${PORT}</code>). Opening the UI…</p>
+    <p>If you are not redirected, open <a href="${UI_DEV}/">${UI_DEV}</a></p>
+    <p style="opacity:.7;font-size:.85rem;">Health: <a href="/api/health">/api/health</a></p>
+  </div>
+</body>
+</html>`)
+}
+
+if (existsSync(join(dist, 'index.html'))) {
+  // Serve built UI whenever dist exists (production Electron / npm start / accidental :8787 opens).
   app.use(express.static(dist))
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(join(dist, 'index.html'))
+  })
+} else {
+  // Dev: no built UI — redirect root so "Cannot GET /" never appears on the API port.
+  app.get('/', (_req, res) => {
+    res.redirect(302, `${UI_DEV}/`)
+  })
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    sendDevLanding(res)
   })
 }
 
@@ -709,4 +746,7 @@ app.listen(PORT, () => {
   console.log(`Workspace: ${config.workspacePath}`)
   console.log(`Models path: ${config.modelsPath}`)
   console.log(`Provider: ${config.provider} @ ${config.baseUrl}`)
+  if (!existsSync(join(dist, 'index.html'))) {
+    console.log(`UI (dev): ${UI_DEV}`)
+  }
 })
