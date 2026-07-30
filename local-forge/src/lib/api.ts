@@ -89,6 +89,39 @@ export interface TerminalResult {
   truncated: boolean
 }
 
+export interface SessionSummary {
+  id: string
+  title: string
+  mode: AgentMode
+  updatedAt: string
+  createdAt: string
+  messageCount: number
+}
+
+export interface ChatSession {
+  id: string
+  title: string
+  mode: AgentMode
+  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string }>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CheckpointSummary {
+  id: string
+  label: string
+  createdAt: string
+  fileCount: number
+}
+
+export interface GitStatus {
+  available: boolean
+  branch?: string
+  dirty: boolean
+  files: Array<{ path: string; status: string }>
+  error?: string
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -144,12 +177,12 @@ export const api = {
       json<{ hits: Array<{ path: string; line: number; preview: string }> }>(r),
     ),
   rules: () => fetch('/api/workspace/rules').then((r) => json<{ rules: string }>(r)),
-  applyEdits: (edits: ChatEdit[]) =>
+  applyEdits: (edits: ChatEdit[], checkpoint = true) =>
     fetch('/api/edits/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ edits }),
-    }).then((r) => json<{ applied: string[] }>(r)),
+      body: JSON.stringify({ edits, checkpoint }),
+    }).then((r) => json<{ applied: string[]; checkpointId?: string }>(r)),
   previewEdits: (edits: ChatEdit[]) =>
     fetch('/api/edits/preview', {
       method: 'POST',
@@ -162,6 +195,52 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command }),
     }).then((r) => json<TerminalResult>(r)),
+  sessions: () => fetch('/api/sessions').then((r) => json<{ sessions: SessionSummary[] }>(r)),
+  createSession: (title?: string, mode?: AgentMode) =>
+    fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, mode }),
+    }).then((r) => json<ChatSession>(r)),
+  getSession: (id: string) => fetch(`/api/sessions/${id}`).then((r) => json<ChatSession>(r)),
+  saveSession: (id: string, patch: Partial<ChatSession>) =>
+    fetch(`/api/sessions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).then((r) => json<ChatSession>(r)),
+  deleteSession: (id: string) =>
+    fetch(`/api/sessions/${id}`, { method: 'DELETE' }).then((r) => json<{ ok: boolean }>(r)),
+  exportSession: async (id: string) => {
+    const res = await fetch(`/api/sessions/${id}/export`)
+    if (!res.ok) throw new Error('Export failed')
+    return res.text()
+  },
+  checkpoints: () =>
+    fetch('/api/checkpoints').then((r) => json<{ checkpoints: CheckpointSummary[] }>(r)),
+  createCheckpoint: (paths: string[], label?: string) =>
+    fetch('/api/checkpoints', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths, label }),
+    }).then((r) => json<{ id: string }>(r)),
+  restoreCheckpoint: (id: string) =>
+    fetch(`/api/checkpoints/${id}/restore`, { method: 'POST' }).then((r) =>
+      json<{ restored: string[] }>(r),
+    ),
+  deleteCheckpoint: (id: string) =>
+    fetch(`/api/checkpoints/${id}`, { method: 'DELETE' }).then((r) => json<{ ok: boolean }>(r)),
+  gitStatus: () => fetch('/api/git/status').then((r) => json<GitStatus>(r)),
+  gitDiff: (path?: string) =>
+    fetch(`/api/git/diff${path ? `?path=${encodeURIComponent(path)}` : ''}`).then((r) =>
+      json<{ diff: string }>(r),
+    ),
+  complete: (body: { prefix: string; suffix?: string; language?: string; path?: string }) =>
+    fetch('/api/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => json<{ completion: string }>(r)),
 }
 
 export type StreamHandlers = {

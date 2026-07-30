@@ -8,6 +8,35 @@ import {
   type ProviderKind,
 } from '../lib/api.ts'
 
+function CustomPull({ disabled, onPull }: { disabled: boolean; onPull: (name: string) => void }) {
+  const [name, setName] = useState('qwen2.5-coder:7b')
+  return (
+    <div className="field-row" style={{ marginBottom: 12 }}>
+      <input
+        value={name}
+        disabled={disabled}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="ollama model name e.g. llama3.2:3b"
+        style={{
+          flex: 1,
+          background: 'var(--bg-deep)',
+          border: '1px solid var(--line)',
+          borderRadius: 8,
+          padding: '9px 11px',
+        }}
+      />
+      <button
+        type="button"
+        className="primary-btn"
+        disabled={disabled || !name.trim()}
+        onClick={() => onPull(name.trim())}
+      >
+        Pull
+      </button>
+    </div>
+  )
+}
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -239,6 +268,12 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
               </div>
             </div>
           )}
+
+          <h3 className="section-title">Custom model name</h3>
+          <CustomPull
+            disabled={offlineMode || provider !== 'ollama' || !!pulling}
+            onPull={(name) => void pull(name, name)}
+          />
 
           <h3 className="section-title">
             {offlineMode ? 'Catalog (downloads locked)' : 'Download catalog'}

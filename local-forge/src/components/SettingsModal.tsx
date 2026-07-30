@@ -13,6 +13,8 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
   const [temperature, setTemperature] = useState(0.2)
   const [offlineMode, setOfflineMode] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
+  const [tabAutocomplete, setTabAutocomplete] = useState(true)
+  const [recent, setRecent] = useState<string[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -21,6 +23,8 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
       setTemperature(c.temperature)
       setOfflineMode(c.offlineMode !== false)
       setAutoSave(c.autoSave !== false)
+      setTabAutocomplete(c.tabAutocomplete !== false)
+      setRecent(c.recentWorkspaces ?? [])
     })
   }, [open])
 
@@ -32,7 +36,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
         <div className="modal-header">
           <div>
             <h2>Settings</h2>
-            <p>Workspace + air-gapped offline controls.</p>
+            <p>Workspace, offline, and editor behavior.</p>
           </div>
           <button type="button" className="ghost-btn" onClick={onClose}>
             Close
@@ -48,6 +52,24 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
               placeholder="/absolute/path/to/project"
             />
           </div>
+          {recent.length > 0 && (
+            <div className="field">
+              <label>Recent workspaces</label>
+              <div className="installed-list">
+                {recent.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="installed-row"
+                    style={{ width: '100%', textAlign: 'left' }}
+                    onClick={() => setWorkspacePath(p)}
+                  >
+                    <span className="hint">{p}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="field">
             <label htmlFor="temp">Temperature ({temperature})</label>
             <input
@@ -67,17 +89,20 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
               onChange={(e) => setOfflineMode(e.target.checked)}
             />
             <span>
-              <strong>Offline mode</strong> — no internet, block model downloads, localhost
-              providers only
+              <strong>Offline mode</strong> — no internet, block downloads, localhost only
             </span>
+          </label>
+          <label className="check-row">
+            <input type="checkbox" checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} />
+            <span>Auto-save after applying edits</span>
           </label>
           <label className="check-row">
             <input
               type="checkbox"
-              checked={autoSave}
-              onChange={(e) => setAutoSave(e.target.checked)}
+              checked={tabAutocomplete}
+              onChange={(e) => setTabAutocomplete(e.target.checked)}
             />
-            <span>Auto-save open files after edits apply</span>
+            <span>Tab autocomplete (ghost text from local model)</span>
           </label>
           <button
             type="button"
@@ -85,15 +110,19 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
             style={{ marginTop: 12 }}
             onClick={() =>
               void api
-                .saveConfig({ workspacePath, temperature, offlineMode, autoSave })
+                .saveConfig({
+                  workspacePath,
+                  temperature,
+                  offlineMode,
+                  autoSave,
+                  tabAutocomplete,
+                })
                 .then((c) => {
                   onConfigChange(c)
                   toast(c.offlineMode ? 'Saved (offline mode on)' : 'Settings saved')
                   onClose()
                 })
-                .catch((err: unknown) =>
-                  toast(err instanceof Error ? err.message : 'Save failed'),
-                )
+                .catch((err: unknown) => toast(err instanceof Error ? err.message : 'Save failed'))
             }
           >
             Save

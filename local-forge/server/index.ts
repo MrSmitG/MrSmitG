@@ -19,6 +19,23 @@ import { buildSystemPrompt, buildUserPayload, parseEditFences, type AgentMode } 
 import { runTerminalCommand } from './terminal.ts'
 import { assertCanUseInternet, assertLocalProvider, isLocalBaseUrl } from './offline.ts'
 import {
+  createSession,
+  deleteSession,
+  exportSessionMarkdown,
+  getSession,
+  listSessions,
+  saveSession,
+  type ChatSession,
+} from './sessions.ts'
+import {
+  createCheckpoint,
+  deleteCheckpoint,
+  listCheckpoints,
+  restoreCheckpoint,
+} from './checkpoints.ts'
+import { gitDiff, gitStatus } from './git.ts'
+import { completePrefix } from './autocomplete.ts'
+import {
   deleteWorkspaceFile,
   gatherContextFiles,
   listTree,
@@ -32,7 +49,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
-const VERSION = '0.3.0'
+const VERSION = '0.4.0'
 
 const app = express()
 app.use(cors())
@@ -72,6 +89,11 @@ app.get('/api/health', async (_req, res) => {
       'diff-preview',
       'project-rules',
       'offline-mode',
+      'chat-sessions',
+      'checkpoints',
+      'git-status',
+      'find-in-files',
+      'tab-autocomplete',
     ],
   })
 })
@@ -454,16 +476,137 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
+
+app.get('/api/sessions', (_req, res) => {
+  res.json({ sessions: listSessions() })
+})
+
+app.post('/api/sessions', (req, res) => {
+  const { title, mode } = req.body as { title?: string; mode?: AgentMode }
+  const session = createSession(title, mode || 'ask')
+  saveConfig({ activeSessionId: session.id })
+  res.json(session)
+})
+
+app.get('/api/sessions/:id', (req, res) => {
+  const session = getSession(req.params.id)
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+  res.json(session)
+})
+
+app.put('/api/sessions/:id', (req, res) => {
+  const existing = getSession(req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Session not found' })
+  const body = req.body as Partial<ChatSession>
+  const next: ChatSession = {
+    ...existing,
+    title: body.title ?? existing.title,
+    mode: body.mode ?? existing.mode,
+    messages: body.messages ?? existing.messages,
+  }
+  res.json(saveSession(next))
+})
+
+app.delete('/api/sessions/:id', (req, res) => {
+  deleteSession(req.params.id)
+  const config = cfg()
+  if (config.activeSessionId === req.params.id) saveConfig({ activeSessionId: '' })
+  res.json({ ok: true })
+})
+
+app.get('/api/sessions/:id/export', (req, res) => {
+  try {
+    const md = exportSessionMarkdown(req.params.id)
+    res.type('text/markdown').send(md)
+  } catch (err) {
+    res.status(404).json({ error: err instanceof Error ? err.message : 'Export failed' })
+  }
+})
+
+app.get('/api/checkpoints', (_req, res) => {
+  res.json({ checkpoints: listCheckpoints() })
+})
+
+app.post('/api/checkpoints', (req, res) => {
+  const config = cfg()
+  const { paths, label } = req.body as { paths?: string[]; label?: string }
+  if (!paths?.length) return res.status(400).json({ error: 'paths required' })
+  res.json(createCheckpoint(config.workspacePath, paths, label || 'checkpoint'))
+})
+
+app.post('/api/checkpoints/:id/restore', (req, res) => {
+  const config = cfg()
+  try {
+    res.json(restoreCheckpoint(config.workspacePath, req.params.id))
+  } catch (err) {
+    res.status(404).json({ error: err instanceof Error ? err.message : 'Restore failed' })
+  }
+})
+
+app.delete('/api/checkpoints/:id', (req, res) => {
+  deleteCheckpoint(req.params.id)
+  res.json({ ok: true })
+})
+
+app.get('/api/git/status', async (_req, res) => {
+  const config = cfg()
+  res.json(await gitStatus(config.workspacePath))
+})
+
+app.get('/api/git/diff', async (req, res) => {
+  const config = cfg()
+  const path = req.query.path ? String(req.query.path) : undefined
+  try {
+    res.json({ diff: await gitDiff(config.workspacePath, path) })
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Diff failed' })
+  }
+})
+
+app.post('/api/complete', async (req, res) => {
+  const config = cfg()
+  const { prefix, suffix, language, path } = req.body as {
+    prefix?: string
+    suffix?: string
+    language?: string
+    path?: string
+  }
+  if (!config.tabAutocomplete) return res.json({ completion: '' })
+  if (!prefix?.trim()) return res.json({ completion: '' })
+  try {
+    const completion = await completePrefix(config, {
+      prefix,
+      suffix: suffix || '',
+      language: language || 'plaintext',
+      path: path || '',
+    })
+    res.json({ completion })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Complete failed', completion: '' })
+  }
+})
+
 app.post('/api/edits/apply', (req, res) => {
   const config = cfg()
-  const { edits } = req.body as { edits?: Array<{ path: string; content: string }> }
+  const { edits, checkpoint } = req.body as {
+    edits?: Array<{ path: string; content: string }>
+    checkpoint?: boolean
+  }
   if (!edits?.length) return res.status(400).json({ error: 'edits required' })
+  let checkpointId: string | undefined
+  if (checkpoint !== false) {
+    checkpointId = createCheckpoint(
+      config.workspacePath,
+      edits.map((e) => e.path),
+      'before-apply',
+    ).id
+  }
   const applied: string[] = []
   for (const edit of edits) {
     writeWorkspaceFile(config.workspacePath, edit.path, edit.content)
     applied.push(edit.path)
   }
-  res.json({ applied })
+  res.json({ applied, checkpointId })
 })
 
 app.post('/api/edits/preview', (req, res) => {

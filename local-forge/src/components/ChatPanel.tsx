@@ -17,6 +17,8 @@ interface Props {
   draft: string
   streaming: boolean
   fileHints: string[]
+  sessions: Array<{ id: string; title: string }>
+  activeSessionId?: string
   onDraft: (v: string) => void
   onSend: () => void
   onStop: () => void
@@ -24,6 +26,9 @@ interface Props {
   onApply: (edits: ChatEdit[]) => void
   onPreview: (edits: ChatEdit[]) => void
   onInsertMention: (path: string) => void
+  onNewSession: () => void
+  onSelectSession: (id: string) => void
+  onExportSession: () => void
 }
 
 export function ChatPanel({
@@ -32,6 +37,8 @@ export function ChatPanel({
   draft,
   streaming,
   fileHints,
+  sessions,
+  activeSessionId,
   onDraft,
   onSend,
   onStop,
@@ -39,6 +46,9 @@ export function ChatPanel({
   onApply,
   onPreview,
   onInsertMention,
+  onNewSession,
+  onSelectSession,
+  onExportSession,
 }: Props) {
   const mentionActive = /@[\w./-]*$/.test(draft)
   const mentionQuery = mentionActive ? (draft.match(/@([\w./-]*)$/)?.[1] ?? '') : ''
@@ -50,11 +60,29 @@ export function ChatPanel({
     <aside className="panel chat chat-panel open">
       <div className="panel-header">
         <span>{mode} panel</span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <select
+            className="session-select"
+            value={activeSessionId || ''}
+            onChange={(e) => onSelectSession(e.target.value)}
+            title="Chat sessions"
+          >
+            <option value="">Current</option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title.slice(0, 28)}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="ghost-btn" style={{ padding: '2px 8px' }} onClick={onNewSession}>
+            +
+          </button>
+          <button type="button" className="ghost-btn" style={{ padding: '2px 8px' }} onClick={onExportSession}>
+            Export
+          </button>
           <button type="button" className="ghost-btn" style={{ padding: '2px 8px' }} onClick={onClear}>
             Clear
           </button>
-          <span className="hint">local</span>
         </div>
       </div>
       <div className="chat-messages">

@@ -4,8 +4,12 @@ import { CommandPalette, type PaletteAction } from './components/CommandPalette.
 import { DiffModal } from './components/DiffModal.tsx'
 import { EditorPane } from './components/EditorPane.tsx'
 import { FileTree } from './components/FileTree.tsx'
+import { GitPanel } from './components/GitPanel.tsx'
 import { ModelHub } from './components/ModelHub.tsx'
+import { SearchPanel } from './components/SearchPanel.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
+import { ShortcutsModal } from './components/ShortcutsModal.tsx'
+import { StatusBar } from './components/StatusBar.tsx'
 import { TerminalPanel } from './components/TerminalPanel.tsx'
 import {
   api,
@@ -17,6 +21,7 @@ import {
   type ChatEdit,
   type DiffPreview,
   type FileNode,
+  type SessionSummary,
 } from './lib/api.ts'
 
 interface Tab {
@@ -32,7 +37,7 @@ const nid = () => `m${++msgId}`
 export default function App() {
   const [mode, setMode] = useState<AgentMode>('ask')
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [version, setVersion] = useState('0.2.0')
+  const [version, setVersion] = useState('0.4.0')
   const [providerOk, setProviderOk] = useState(false)
   const [tree, setTree] = useState<FileNode[]>([])
   const [tabs, setTabs] = useState<Tab[]>([])
@@ -45,10 +50,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [gitOpen, setGitOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [diffOpen, setDiffOpen] = useState(false)
   const [diffPreviews, setDiffPreviews] = useState<DiffPreview[]>([])
   const [pendingEdits, setPendingEdits] = useState<ChatEdit[]>([])
+  const [sessions, setSessions] = useState<SessionSummary[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>()
+  const [gitBranch, setGitBranch] = useState<string | undefined>()
   const abortRef = useRef<AbortController | null>(null)
 
   const showToast = useCallback((msg: string) => {
@@ -57,13 +68,14 @@ export default function App() {
   }, [])
 
   const fileHints = useMemo(() => flattenFiles(tree), [tree])
+  const activeTab = tabs.find((t) => t.path === activePath)
 
   const refreshHealth = useCallback(async () => {
     try {
       const h = await api.health()
       setProviderOk(h.provider.ok)
       setVersion(h.version)
-      setConfig((prev) => prev ?? (h.config as AppConfig))
+      setConfig((prev) => ({ ...(prev ?? (h.config as AppConfig)), ...h.config }))
     } catch {
       setProviderOk(false)
     }
@@ -74,16 +86,73 @@ export default function App() {
     setTree(t.tree)
   }, [])
 
+  const refreshSessions = useCallback(async () => {
+    const { sessions: list } = await api.sessions()
+    setSessions(list)
+  }, [])
+
+  const refreshGit = useCallback(async () => {
+    try {
+      const s = await api.gitStatus()
+      setGitBranch(s.available ? s.branch : undefined)
+    } catch {
+      setGitBranch(undefined)
+    }
+  }, [])
+
   useEffect(() => {
     void (async () => {
       const c = await api.getConfig()
       setConfig(c)
+      setActiveSessionId(c.activeSessionId || undefined)
       await refreshHealth()
       await refreshTree()
+      await refreshSessions()
+      await refreshGit()
+      if (c.activeSessionId) {
+        try {
+          const s = await api.getSession(c.activeSessionId)
+          setMessages(
+            s.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+          )
+          setMode(s.mode)
+        } catch {
+          /* ignore */
+        }
+      }
     })()
-    const id = window.setInterval(() => void refreshHealth(), 12000)
+    const id = window.setInterval(() => {
+      void refreshHealth()
+      void refreshGit()
+    }, 12000)
     return () => window.clearInterval(id)
-  }, [refreshHealth, refreshTree])
+  }, [refreshHealth, refreshTree, refreshSessions, refreshGit])
+
+  const persistSession = useCallback(
+    async (nextMessages: UiMessage[], nextMode: AgentMode) => {
+      let sid = activeSessionId
+      if (!sid) {
+        const created = await api.createSession(
+          nextMessages.find((m) => m.role === 'user')?.content.slice(0, 48) || 'New chat',
+          nextMode,
+        )
+        sid = created.id
+        setActiveSessionId(sid)
+        await api.saveConfig({ activeSessionId: sid })
+      }
+      await api.saveSession(sid, {
+        mode: nextMode,
+        messages: nextMessages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          createdAt: new Date().toISOString(),
+        })),
+      })
+      await refreshSessions()
+    },
+    [activeSessionId, refreshSessions],
+  )
 
   const openFile = async (path: string) => {
     const existing = tabs.find((t) => t.path === path)
@@ -156,15 +225,13 @@ export default function App() {
     const mentioned = parseMentions(prompt).filter((p) => fileHints.includes(p))
     const userMsg: UiMessage = { id: nid(), role: 'user', content: prompt }
     const assistantId = nid()
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
-      { id: assistantId, role: 'assistant', content: '', tools: [] },
-    ])
+    const seeded = [...messages, userMsg, { id: assistantId, role: 'assistant' as const, content: '', tools: [] as string[] }]
+    setMessages(seeded)
     setStreaming(true)
     const ac = new AbortController()
     abortRef.current = ac
 
+    let finalMessages = seeded
     await streamChat(
       {
         prompt,
@@ -178,9 +245,13 @@ export default function App() {
       },
       {
         onToken: (t) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + t } : m)),
-          )
+          setMessages((prev) => {
+            const next = prev.map((m) =>
+              m.id === assistantId ? { ...m, content: m.content + t } : m,
+            )
+            finalMessages = next
+            return next
+          })
         },
         onTool: (name) => {
           setMessages((prev) =>
@@ -192,13 +263,15 @@ export default function App() {
           )
         },
         onDone: (full, edits, applied) => {
-          setMessages((prev) =>
-            prev.map((m) =>
+          setMessages((prev) => {
+            const next = prev.map((m) =>
               m.id === assistantId
                 ? { ...m, content: full || m.content, edits, applied }
                 : m,
-            ),
-          )
+            )
+            finalMessages = next
+            return next
+          })
           if (applied.length) {
             void (async () => {
               for (const path of applied) {
@@ -213,32 +286,32 @@ export default function App() {
                           : t,
                       )
                     }
-                    return [
-                      ...prev,
-                      { path, content: file.content, language: file.language },
-                    ]
+                    return [...prev, { path, content: file.content, language: file.language }]
                   })
                 } catch {
                   /* skip */
                 }
               }
               await refreshTree()
+              await refreshGit()
             })()
           }
         },
         onError: (msg) => {
-          setMessages((prev) =>
-            prev.map((m) =>
+          setMessages((prev) => {
+            const next = prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
                     content:
                       m.content ||
-                      `**Error:** ${msg}\n\nOpen **Model Hub**, start Ollama/LM Studio, and select a downloaded model.`,
+                      `**Error:** ${msg}\n\nOpen **Model Hub**, enable Offline engine or a localhost model.`,
                   }
                 : m,
-            ),
-          )
+            )
+            finalMessages = next
+            return next
+          })
         },
       },
       ac.signal,
@@ -249,6 +322,7 @@ export default function App() {
 
     abortRef.current = null
     setStreaming(false)
+    void persistSession(finalMessages, useMode)
   }
 
   const onSend = async () => {
@@ -267,7 +341,7 @@ export default function App() {
   }
 
   const onApply = async (edits: ChatEdit[]) => {
-    const { applied } = await api.applyEdits(edits)
+    const { applied, checkpointId } = await api.applyEdits(edits, true)
     for (const path of applied) {
       const file = await api.readFile(path)
       setTabs((prev) => {
@@ -288,8 +362,13 @@ export default function App() {
       ),
     )
     await refreshTree()
+    await refreshGit()
     setDiffOpen(false)
-    showToast(`Applied ${applied.length} file(s)`)
+    showToast(
+      checkpointId
+        ? `Applied ${applied.length} file(s) · checkpoint ${checkpointId}`
+        : `Applied ${applied.length} file(s)`,
+    )
   }
 
   const onPreview = async (edits: ChatEdit[]) => {
@@ -303,25 +382,85 @@ export default function App() {
     setDraft((d) => d.replace(/@[\w./-]*$/, `@${path} `))
   }
 
+  const newSession = async () => {
+    const s = await api.createSession('New chat', mode)
+    setActiveSessionId(s.id)
+    setMessages([])
+    await api.saveConfig({ activeSessionId: s.id })
+    await refreshSessions()
+    showToast('New chat session')
+  }
+
+  const selectSession = async (id: string) => {
+    if (!id) return
+    const s = await api.getSession(id)
+    setActiveSessionId(id)
+    setMode(s.mode)
+    setMessages(s.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })))
+    await api.saveConfig({ activeSessionId: id })
+  }
+
+  const exportSession = async () => {
+    if (!activeSessionId) {
+      showToast('Save a message first to create a session')
+      return
+    }
+    const md = await api.exportSession(activeSessionId)
+    const blob = new Blob([md], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `localforge-chat-${activeSessionId}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const undoLastCheckpoint = async () => {
+    const { checkpoints } = await api.checkpoints()
+    const latest = checkpoints[0]
+    if (!latest) {
+      showToast('No checkpoints yet')
+      return
+    }
+    const { restored } = await api.restoreCheckpoint(latest.id)
+    for (const path of restored) {
+      try {
+        await openFile(path)
+        const file = await api.readFile(path)
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.path === path
+              ? { ...t, content: file.content, language: file.language, dirty: false }
+              : t,
+          ),
+        )
+      } catch {
+        /* skip */
+      }
+    }
+    await refreshTree()
+    showToast(`Restored checkpoint ${latest.id}`)
+  }
+
   const paletteActions: PaletteAction[] = useMemo(() => {
     const cmds: PaletteAction[] = [
       { id: 'hub', label: 'Open Model Hub', hint: 'models', run: () => setHubOpen(true) },
       { id: 'settings', label: 'Open Settings', hint: 'workspace', run: () => setSettingsOpen(true) },
+      { id: 'search', label: 'Find in files', hint: '⌘⇧F', run: () => setSearchOpen(true) },
+      { id: 'git', label: 'Toggle Git panel', hint: 'scm', run: () => setGitOpen((v) => !v) },
       { id: 'term', label: 'Toggle Terminal', hint: 'shell', run: () => setTerminalOpen((v) => !v) },
+      { id: 'shortcuts', label: 'Keyboard shortcuts', run: () => setShortcutsOpen(true) },
       { id: 'save', label: 'Save file', hint: '⌘S', run: () => void saveActive() },
       { id: 'new', label: 'New file', run: () => void createFile() },
+      { id: 'session', label: 'New chat session', run: () => void newSession() },
+      { id: 'undo-cp', label: 'Restore last checkpoint', run: () => void undoLastCheckpoint() },
       { id: 'ask', label: 'Mode: Ask', run: () => setMode('ask') },
       { id: 'edit', label: 'Mode: Edit', run: () => setMode('edit') },
       { id: 'agent', label: 'Mode: Agent', run: () => setMode('agent') },
       { id: 'clear', label: 'Clear chat', run: () => setMessages([]) },
     ]
     for (const f of fileHints) {
-      cmds.push({
-        id: `file:${f}`,
-        label: f,
-        hint: 'file',
-        run: () => void openFile(f),
-      })
+      cmds.push({ id: `file:${f}`, label: f, hint: 'file', run: () => void openFile(f) })
     }
     return cmds
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -335,8 +474,7 @@ export default function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        const el = document.querySelector<HTMLInputElement>('.inline-bar input')
-        el?.focus()
+        document.querySelector<HTMLInputElement>('.inline-bar input')?.focus()
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault()
@@ -346,9 +484,15 @@ export default function App() {
         e.preventDefault()
         setTerminalOpen((v) => !v)
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
       if (e.key === 'Escape') {
         setPaletteOpen(false)
         setDiffOpen(false)
+        setSearchOpen(false)
+        setShortcutsOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -372,7 +516,7 @@ export default function App() {
           </svg>
           <div>
             <div className="brand-name">LocalForge</div>
-            <div className="brand-tag">v{version} · local LLM IDE</div>
+            <div className="brand-tag">v{version} · Cursor-style fork</div>
           </div>
         </div>
 
@@ -395,9 +539,15 @@ export default function App() {
             className={`status-dot ${providerOk ? 'ok' : ''}`}
             title={providerOk ? 'Local provider online' : 'Local provider offline'}
           />
-          <span className="hint" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span className="hint" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {config?.selectedModel || 'no model'}
           </span>
+          <button type="button" className="ghost-btn" onClick={() => setSearchOpen(true)} title="Find">
+            Find
+          </button>
+          <button type="button" className="ghost-btn" onClick={() => setGitOpen((v) => !v)}>
+            Git
+          </button>
           <button type="button" className="ghost-btn" onClick={() => setPaletteOpen(true)} title="⌘P">
             ⌘P
           </button>
@@ -413,7 +563,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className={`main-grid ${terminalOpen ? 'with-term' : ''}`}>
+      <div className={`main-grid ${terminalOpen ? 'with-term' : ''} ${gitOpen ? 'with-git' : ''}`}>
         <aside className="panel files">
           <div className="panel-header">
             <span>Files</span>
@@ -435,6 +585,7 @@ export default function App() {
               onDelete={(p) => void deleteFile(p)}
             />
           </div>
+          {gitOpen && <GitPanel open={gitOpen} onOpenFile={(p) => void openFile(p)} />}
         </aside>
 
         <div className="center-stack">
@@ -448,6 +599,7 @@ export default function App() {
             onInlinePrompt={setInlinePrompt}
             onInlineEdit={() => void onInlineEdit()}
             streaming={streaming}
+            autocomplete={config?.tabAutocomplete !== false}
           />
           <TerminalPanel open={terminalOpen} onToggle={() => setTerminalOpen((v) => !v)} />
         </div>
@@ -458,6 +610,8 @@ export default function App() {
           draft={draft}
           streaming={streaming}
           fileHints={fileHints}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
           onDraft={setDraft}
           onSend={() => void onSend()}
           onStop={stopStream}
@@ -465,8 +619,21 @@ export default function App() {
           onApply={(edits) => void onApply(edits)}
           onPreview={(edits) => void onPreview(edits)}
           onInsertMention={insertMention}
+          onNewSession={() => void newSession()}
+          onSelectSession={(id) => void selectSession(id)}
+          onExportSession={() => void exportSession()}
         />
       </div>
+
+      <StatusBar
+        offline={config?.offlineMode !== false}
+        providerOk={providerOk}
+        model={config?.selectedModel}
+        branch={gitBranch}
+        path={activePath}
+        language={activeTab?.language}
+        version={version}
+      />
 
       <ModelHub
         open={hubOpen}
@@ -480,20 +647,23 @@ export default function App() {
         onConfigChange={(c) => {
           setConfig(c)
           void refreshTree()
+          void refreshGit()
         }}
         toast={showToast}
       />
-      <CommandPalette
-        open={paletteOpen}
-        actions={paletteActions}
-        onClose={() => setPaletteOpen(false)}
-      />
+      <CommandPalette open={paletteOpen} actions={paletteActions} onClose={() => setPaletteOpen(false)} />
       <DiffModal
         open={diffOpen}
         previews={diffPreviews}
         onClose={() => setDiffOpen(false)}
         onApply={() => void onApply(pendingEdits)}
       />
+      <SearchPanel
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpen={(p) => void openFile(p)}
+      />
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {toast && <div className="toast">{toast}</div>}
     </div>

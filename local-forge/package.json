@@ -1,8 +1,8 @@
 {
   "name": "local-forge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Cursor-like AI coding IDE powered by local LLMs — choose, download, and run models offline",
+  "description": "Cursor-style local LLM IDE fork — offline-first Ask/Edit/Agent with Model Hub",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/vendor-monaco.mjs",

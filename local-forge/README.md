@@ -18,6 +18,11 @@ Cursor itself is closed-source; LocalForge is an open alternative with the same 
 | Project rules | `.localforgerules` |
 | Cloud models | **Replaced by local / offline engines** |
 | Air-gapped use | **Offline mode** — no internet, no CDN, localhost only |
+| Chat history | Persistent **sessions** + markdown export |
+| Undo agent edits | **Checkpoints** before apply |
+| SCM | Git status / diff panel |
+| Find | Find in files (⌘⇧F) |
+| Ghost text | Tab autocomplete from local model |
 
 Also included:
 

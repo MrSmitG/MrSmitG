@@ -320,10 +320,14 @@ export async function chatCompletion(
 
   if (config.provider === 'demo') {
     const text = demoReply(body.messages)
+    if (body.stream === false) {
+      return new Response(JSON.stringify({ message: { content: text }, done: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder()
-        // Emit OpenAI-style SSE chunks so the server can reuse one parser path via native ollama format
         const words = text.split(/(\s+)/)
         for (const w of words) {
           controller.enqueue(

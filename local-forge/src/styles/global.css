@@ -81,7 +81,7 @@ a {
 .app-shell {
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   animation: shell-in 0.55s ease both;
 }
 
@@ -1055,4 +1055,55 @@ a {
   border: 1px solid rgba(127, 212, 184, 0.35);
   color: var(--accent);
   background: rgba(61, 143, 120, 0.12);
+}
+
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(7, 20, 17, 0.92);
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  min-height: 26px;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ok-text {
+  color: var(--ok);
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+.session-select {
+  max-width: 120px;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+
+.side-drawer {
+  border-top: 1px solid var(--line);
+  max-height: 40%;
+  overflow: auto;
+  background: rgba(7, 20, 17, 0.55);
+}
+
+.main-grid.with-git .panel.files {
+  display: flex;
+  flex-direction: column;
 }

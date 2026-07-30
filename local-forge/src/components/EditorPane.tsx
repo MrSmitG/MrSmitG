@@ -1,4 +1,6 @@
-import Editor from '@monaco-editor/react'
+import Editor, { type OnMount } from '@monaco-editor/react'
+import { useRef } from 'react'
+import { api } from '../lib/api.ts'
 
 interface Tab {
   path: string
@@ -17,6 +19,7 @@ interface Props {
   onInlinePrompt: (v: string) => void
   onInlineEdit: () => void
   streaming?: boolean
+  autocomplete?: boolean
 }
 
 export function EditorPane({
@@ -29,8 +32,52 @@ export function EditorPane({
   onInlinePrompt,
   onInlineEdit,
   streaming,
+  autocomplete = true,
 }: Props) {
   const active = tabs.find((t) => t.path === activePath)
+  const disposeRef = useRef<(() => void) | null>(null)
+
+  const handleMount: OnMount = (_editor, monaco) => {
+    disposeRef.current?.()
+    if (!autocomplete) return
+
+    const provider = monaco.languages.registerInlineCompletionsProvider({ pattern: '**' }, {
+      provideInlineCompletions: async (model: { getOffsetAt: (p: { lineNumber: number; column: number }) => number; getValue: () => string; getLanguageId: () => string }, position: { lineNumber: number; column: number }) => {
+        if (!autocomplete) return { items: [] }
+        const offset = model.getOffsetAt(position)
+        const value = model.getValue()
+        const prefix = value.slice(0, offset)
+        const suffix = value.slice(offset)
+        try {
+          const { completion } = await api.complete({
+            prefix,
+            suffix,
+            language: model.getLanguageId(),
+            path: activePath,
+          })
+          if (!completion) return { items: [] }
+          return {
+            items: [
+              {
+                insertText: completion,
+                range: new monaco.Range(
+                  position.lineNumber,
+                  position.column,
+                  position.lineNumber,
+                  position.column,
+                ),
+              },
+            ],
+          }
+        } catch {
+          return { items: [] }
+        }
+      },
+      freeInlineCompletions: () => undefined,
+    })
+
+    disposeRef.current = () => provider.dispose()
+  }
 
   return (
     <div className="editor-wrap panel">
@@ -77,6 +124,7 @@ export function EditorPane({
               language={active.language}
               value={active.content}
               onChange={(v) => onChange(active.path, v ?? '')}
+              onMount={handleMount}
               options={{
                 fontFamily: "'IBM Plex Mono', monospace",
                 fontSize: 13,
@@ -85,6 +133,7 @@ export function EditorPane({
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
                 wordWrap: 'on',
+                inlineSuggest: { enabled: autocomplete },
               }}
             />
           </div>
@@ -119,7 +168,7 @@ export function EditorPane({
               Cursor-style coding with models that live on your machine. Open a file, pick a local
               LLM, then Ask / Edit / Agent — no cloud required.
             </p>
-            <p className="hint">Tip: open Model Hub to download Qwen2.5 Coder or Code Llama.</p>
+            <p className="hint">Tip: ⌘P palette · ⌘Shift+F find · Offline mode for air-gapped use.</p>
           </div>
         </div>
       )}
