@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type AppConfig } from '../lib/api.ts'
+import { getDesktop } from '../lib/desktop.ts'
 
 interface Props {
   open: boolean
@@ -16,6 +17,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
   const [tabAutocomplete, setTabAutocomplete] = useState(true)
   const [graphLlm, setGraphLlm] = useState(true)
   const [recent, setRecent] = useState<string[]>([])
+  const desktop = getDesktop()
 
   useEffect(() => {
     if (!open) return
@@ -32,6 +34,20 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
 
   if (!open) return null
 
+  const browseWorkspace = async () => {
+    if (!desktop) return
+    const picked = await desktop.pickFolder({
+      title: 'Choose workspace folder',
+      defaultPath: workspacePath || undefined,
+    })
+    if (picked) setWorkspacePath(picked)
+  }
+
+  const revealWorkspace = async () => {
+    if (!desktop || !workspacePath) return
+    await desktop.revealInFinder(workspacePath)
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
       <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()} role="dialog">
@@ -47,12 +63,24 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
         <div className="modal-body">
           <div className="field">
             <label htmlFor="ws">Workspace path</label>
-            <input
-              id="ws"
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
-              placeholder="/absolute/path/to/project"
-            />
+            <div className="field-row">
+              <input
+                id="ws"
+                value={workspacePath}
+                onChange={(e) => setWorkspacePath(e.target.value)}
+                placeholder="/absolute/path/to/project"
+              />
+              {desktop && (
+                <>
+                  <button type="button" className="ghost-btn" onClick={() => void browseWorkspace()}>
+                    Browse…
+                  </button>
+                  <button type="button" className="ghost-btn" onClick={() => void revealWorkspace()}>
+                    Finder
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           {recent.length > 0 && (
             <div className="field">

@@ -1,6 +1,6 @@
 # LocalForge
 
-**Cursor-like AI coding IDE that runs on your local LLM** — chat, inline edit, and multi-file agent — with a Model Hub to choose download location and pull models.
+**Cursor-like AI coding IDE that runs on your local LLM** — chat, inline edit, and multi-file agent — with a Model Hub to choose download location and pull models. **v0.6** ships a **Mac desktop app** (Electron) with native menus, folder pickers, and Finder integration.
 
 Cursor itself is closed-source; LocalForge is an open alternative with the same core workflows, wired to **Ollama**, **LM Studio**, or any **OpenAI-compatible** local server.
 
@@ -24,6 +24,7 @@ Cursor itself is closed-source; LocalForge is an open alternative with the same 
 | Find | Find in files (⌘⇧F) |
 | Ghost text | Tab autocomplete from local model |
 | **Graph LLM** | Code knowledge graph + GraphRAG for Ask/Edit/Agent |
+| **Mac app** | Electron shell — native menus, Browse… pickers, Finder, notifications |
 
 Also included:
 
@@ -33,6 +34,39 @@ Also included:
 - File tree + Monaco editor + tabs
 - Streaming responses over SSE
 - Demo workspace so you can try immediately
+
+## Mac desktop app
+
+### Develop (Electron + Vite)
+
+```bash
+cd local-forge
+npm install
+npm run dev:mac
+```
+
+This starts the API, Vite UI, and Electron window together. On macOS you get:
+
+- Traffic-light title bar (`hiddenInset`)
+- App menus: File / Edit / View / LLM / Window / Help
+- **Open Workspace…** / **Browse…** native folder dialogs
+- **Reveal in Finder** for the workspace
+- Desktop notification when Agent finishes
+- Shortcuts: ⌘O, ⌘,, ⌘⇧M, ⌘⇧G, and the rest of the IDE map
+
+### Package a Mac DMG / ZIP
+
+Build on a Mac (or CI with macOS runners):
+
+```bash
+cd local-forge
+npm install
+npm run build:mac
+```
+
+Artifacts land in `local-forge/release/` (`LocalForge-*.dmg` and `.zip` for arm64 + x64). Signing is off by default (`identity: null`) so local builds work without Apple Developer certs; add notarization in your own release pipeline if you distribute outside your machine.
+
+> Linux/Windows agents can still develop the React app with `npm run dev`. Electron packaging for `.dmg` requires macOS.
 
 ## Quick start
 
@@ -81,6 +115,8 @@ npm run dev
 - UI: http://127.0.0.1:5173  
 - API: http://127.0.0.1:8787  
 
+Or on Mac: `npm run dev:mac` for the desktop shell.
+
 ### 3. Download a model
 
 1. Click **Model Hub**
@@ -98,7 +134,9 @@ Open files from the demo workspace (or set your project path in **Settings**), t
 | Command | Purpose |
 |---|---|
 | `npm run dev` | API + Vite together |
+| `npm run dev:mac` / `dev:desktop` | API + Vite + Electron (Mac-ready) |
 | `npm run build` | Production UI build |
+| `npm run build:mac` | Production UI + Electron Mac DMG/ZIP |
 | `npm start` | Serve API (+ built UI when `NODE_ENV=production`) |
 | `npm test` | Unit tests |
 | `npm run lint` | Typecheck |
@@ -134,4 +172,4 @@ You can **Apply edits** from the chat panel (or let Agent apply when enabled).
 
 ## Stack
 
-React + Vite + Monaco · Express · TypeScript · Ollama / OpenAI-compatible APIs
+React + Vite + Monaco · Express · TypeScript · Electron (Mac) · Ollama / OpenAI-compatible APIs

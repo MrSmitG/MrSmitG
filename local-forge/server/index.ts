@@ -55,7 +55,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
-const VERSION = '0.5.0'
+const VERSION = '0.6.0'
 
 const app = express()
 app.use(cors())
@@ -101,6 +101,9 @@ app.get('/api/health', async (_req, res) => {
       'find-in-files',
       'tab-autocomplete',
       'graph-llm',
+      'mac-desktop',
+      'native-folder-picker',
+      'desktop-notifications',
     ],
   })
 })

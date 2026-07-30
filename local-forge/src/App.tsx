@@ -24,6 +24,7 @@ import {
   type FileNode,
   type SessionSummary,
 } from './lib/api.ts'
+import { getDesktop, isDesktopMacApp, type DesktopMenuAction } from './lib/desktop.ts'
 
 interface Tab {
   path: string
@@ -38,7 +39,8 @@ const nid = () => `m${++msgId}`
 export default function App() {
   const [mode, setMode] = useState<AgentMode>('ask')
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [version, setVersion] = useState('0.4.0')
+  const [version, setVersion] = useState('0.6.0')
+  const [desktopMac, setDesktopMac] = useState(false)
   const [providerOk, setProviderOk] = useState(false)
   const [tree, setTree] = useState<FileNode[]>([])
   const [tabs, setTabs] = useState<Tab[]>([])
@@ -104,6 +106,20 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
+      const desk = getDesktop()
+      if (desk) {
+        setDesktopMac(isDesktopMacApp())
+        try {
+          const info = await desk.getInfo()
+          setDesktopMac(info.isElectron && (info.isMac || info.platform === 'darwin'))
+          document.documentElement.classList.add('is-desktop')
+          if (info.isMac || info.platform === 'darwin') {
+            document.documentElement.classList.add('is-mac-desktop')
+          }
+        } catch {
+          document.documentElement.classList.add('is-desktop')
+        }
+      }
       const c = await api.getConfig()
       setConfig(c)
       setActiveSessionId(c.activeSessionId || undefined)
@@ -325,7 +341,95 @@ export default function App() {
     abortRef.current = null
     setStreaming(false)
     void persistSession(finalMessages, useMode)
+    const desk = getDesktop()
+    if (desk && useMode === 'agent') {
+      void desk.notify('LocalForge', 'Agent finished')
+    }
   }
+
+  const openWorkspaceNative = useCallback(async () => {
+    const desk = getDesktop()
+    if (!desk) {
+      setSettingsOpen(true)
+      return
+    }
+    const picked = await desk.pickFolder({
+      title: 'Open Workspace',
+      defaultPath: config?.workspacePath,
+    })
+    if (!picked) return
+    try {
+      const next = await api.saveConfig({ workspacePath: picked })
+      setConfig(next)
+      await refreshTree()
+      await refreshGit()
+      showToast(`Workspace: ${picked}`)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to open workspace')
+    }
+  }, [config?.workspacePath, refreshGit, refreshTree, showToast])
+
+  const toggleOfflineDesktop = useCallback(async () => {
+    const cur = config?.offlineMode !== false
+    try {
+      const next = await api.saveConfig({ offlineMode: !cur })
+      setConfig(next)
+      showToast(next.offlineMode ? 'Offline mode on' : 'Offline mode off')
+      await refreshHealth()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to toggle offline')
+    }
+  }, [config?.offlineMode, refreshHealth, showToast])
+
+  useEffect(() => {
+    const desk = getDesktop()
+    if (!desk) return
+    return desk.onMenuAction((action: DesktopMenuAction) => {
+      switch (action.type) {
+        case 'settings':
+          setSettingsOpen(true)
+          break
+        case 'open-workspace':
+          void openWorkspaceNative()
+          break
+        case 'save':
+          void saveActive()
+          break
+        case 'new-file':
+          void createFile()
+          break
+        case 'reveal-workspace':
+          if (config?.workspacePath) void desk.revealInFinder(config.workspacePath)
+          break
+        case 'palette':
+          setPaletteOpen(true)
+          break
+        case 'search':
+          setSearchOpen(true)
+          break
+        case 'graph':
+          setGraphOpen(true)
+          break
+        case 'terminal':
+          setTerminalOpen((v) => !v)
+          break
+        case 'model-hub':
+          setHubOpen(true)
+          break
+        case 'mode':
+          setMode(action.mode)
+          break
+        case 'toggle-offline':
+          void toggleOfflineDesktop()
+          break
+        case 'shortcuts':
+          setShortcutsOpen(true)
+          break
+        default:
+          break
+      }
+    })
+  })
 
   const onSend = async () => {
     const prompt = draft
@@ -448,6 +552,7 @@ export default function App() {
     const cmds: PaletteAction[] = [
       { id: 'hub', label: 'Open Model Hub', hint: 'models', run: () => setHubOpen(true) },
       { id: 'settings', label: 'Open Settings', hint: 'workspace', run: () => setSettingsOpen(true) },
+      { id: 'open-ws', label: 'Open Workspace…', hint: 'folder', run: () => void openWorkspaceNative() },
       { id: 'search', label: 'Find in files', hint: '⌘⇧F', run: () => setSearchOpen(true) },
       { id: 'git', label: 'Toggle Git panel', hint: 'scm', run: () => setGitOpen((v) => !v) },
       { id: 'graph', label: 'Open Graph LLM', hint: 'knowledge graph', run: () => setGraphOpen(true) },
@@ -503,7 +608,7 @@ export default function App() {
   })
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${desktopMac ? 'mac-desktop' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <svg className="brand-mark" viewBox="0 0 64 64" fill="none" aria-hidden>
@@ -519,7 +624,9 @@ export default function App() {
           </svg>
           <div>
             <div className="brand-name">LocalForge</div>
-            <div className="brand-tag">v{version} · Cursor-style fork</div>
+            <div className="brand-tag">
+              v{version} · {desktopMac ? 'Mac desktop' : 'Cursor-style fork'}
+            </div>
           </div>
         </div>
 
@@ -545,6 +652,9 @@ export default function App() {
           <span className="hint" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {config?.selectedModel || 'no model'}
           </span>
+          <button type="button" className="ghost-btn" onClick={() => void openWorkspaceNative()} title="Open workspace">
+            Open
+          </button>
           <button type="button" className="ghost-btn" onClick={() => setSearchOpen(true)} title="Find">
             Find
           </button>

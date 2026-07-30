@@ -5,12 +5,16 @@ interface Props {
 
 const ROWS = [
   ['⌘/Ctrl + P', 'Command palette'],
+  ['⌘/Ctrl + O', 'Open workspace (Mac app)'],
   ['⌘/Ctrl + S', 'Save file'],
+  ['⌘/Ctrl + N', 'New file (Mac app)'],
   ['⌘/Ctrl + K', 'Focus inline edit'],
   ['⌘/Ctrl + `', 'Toggle terminal'],
   ['⌘/Ctrl + Shift + F', 'Find in files'],
+  ['⌘/Ctrl + Shift + G', 'Graph LLM (Mac app)'],
+  ['⌘/Ctrl + Shift + M', 'Model Hub (Mac app)'],
+  ['⌘/Ctrl + ,', 'Preferences (Mac app)'],
   ['⌘/Ctrl + Enter', 'Send chat'],
-  ['Graph button', 'Open Graph LLM knowledge graph'],
   ['Esc', 'Close overlays'],
 ]
 

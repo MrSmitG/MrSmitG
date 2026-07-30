@@ -85,6 +85,22 @@ a {
   animation: shell-in 0.55s ease both;
 }
 
+html.is-mac-desktop .topbar,
+.app-shell.mac-desktop .topbar {
+  padding-left: 78px;
+  padding-top: 12px;
+  -webkit-app-region: drag;
+}
+
+html.is-mac-desktop .topbar button,
+html.is-mac-desktop .topbar input,
+html.is-mac-desktop .topbar select,
+.app-shell.mac-desktop .topbar button,
+.app-shell.mac-desktop .topbar input,
+.app-shell.mac-desktop .topbar select {
+  -webkit-app-region: no-drag;
+}
+
 @keyframes shell-in {
   from {
     opacity: 0;

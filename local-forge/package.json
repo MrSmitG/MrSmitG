@@ -1,16 +1,23 @@
 {
   "name": "local-forge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
-  "description": "Cursor-style local LLM IDE fork with Graph LLM and offline-first agents",
+  "description": "Cursor-style local LLM IDE for Mac — Graph LLM, offline agents, Electron desktop",
+  "author": "LocalForge",
+  "license": "MIT",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "postinstall": "node scripts/vendor-monaco.mjs",
     "vendor:monaco": "node scripts/vendor-monaco.mjs",
     "dev": "npm run vendor:monaco && concurrently -k -n server,web -c teal,amber \"npm run dev:server\" \"npm run dev:web\"",
     "dev:web": "vite",
     "dev:server": "tsx watch server/index.ts",
+    "dev:desktop": "npm run vendor:monaco && concurrently -k -n server,web,mac -c teal,amber,magenta \"npm run dev:server\" \"npm run dev:web\" \"node scripts/wait-and-electron.mjs\"",
+    "dev:mac": "npm run dev:desktop",
     "build": "npm run vendor:monaco && tsc -b && vite build",
+    "build:mac": "npm run build && electron-builder --mac --publish never",
+    "build:mac:dir": "npm run build && electron-builder --mac --dir --publish never",
     "start": "NODE_ENV=production tsx server/index.ts",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
@@ -37,8 +44,82 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.15.3",
     "tsx": "^4.19.3",
     "typescript": "~5.8.3",
     "vite": "^6.3.2"
+  },
+  "build": {
+    "appId": "com.localforge.app",
+    "productName": "LocalForge",
+    "copyright": "Copyright © LocalForge",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/resources"
+    },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "electron/**/*",
+      "public/monaco/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/**/{CHANGELOG.md,README.md,readme.md,README,readme}",
+      "!node_modules/.cache/**/*",
+      "!**/*.{map,tsbuildinfo}",
+      "!release/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "server/**/*",
+      "public/monaco/**/*",
+      "node_modules/tsx/**/*",
+      "node_modules/esbuild/**/*",
+      "node_modules/@esbuild/**/*",
+      "node_modules/get-tsconfig/**/*",
+      "node_modules/resolve-pkg-maps/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "dmg": {
+      "title": "LocalForge",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }

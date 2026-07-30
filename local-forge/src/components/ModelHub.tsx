@@ -7,6 +7,7 @@ import {
   type ModelsResponse,
   type ProviderKind,
 } from '../lib/api.ts'
+import { getDesktop } from '../lib/desktop.ts'
 
 function CustomPull({ disabled, onPull }: { disabled: boolean; onPull: (name: string) => void }) {
   const [name, setName] = useState('qwen2.5-coder:7b')
@@ -56,6 +57,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
+  const desktop = getDesktop()
 
   const refresh = async () => {
     setLoading(true)
@@ -197,12 +199,28 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
                 onChange={(e) => setModelsPath(e.target.value)}
                 placeholder="/path/to/models"
               />
+              {desktop && (
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() =>
+                    void desktop
+                      .pickFolder({ title: 'Choose models folder', defaultPath: modelsPath || undefined })
+                      .then((p) => {
+                        if (p) setModelsPath(p)
+                      })
+                  }
+                >
+                  Browse…
+                </button>
+              )}
               <button type="button" className="primary-btn" onClick={() => void saveLocation()}>
                 Save path
               </button>
             </div>
             <span className="hint">
               Used as <code>OLLAMA_MODELS</code> when pulling via Ollama (requires offline mode off).
+              {desktop ? ' On Mac, use Browse for a native folder picker.' : ''}
             </span>
           </div>
 
