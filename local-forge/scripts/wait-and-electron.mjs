@@ -33,7 +33,11 @@ function waitFor(url, label) {
 }
 
 await waitFor('http://127.0.0.1:8787/api/health', 'API')
-await waitFor('http://127.0.0.1:5173', 'Vite UI')
+try {
+  await waitFor('http://127.0.0.1:5173', 'Vite UI')
+} catch {
+  await waitFor('http://localhost:5173', 'Vite UI (localhost)')
+}
 
 const child = spawn(electronBin, ['.'], {
   cwd: root,
