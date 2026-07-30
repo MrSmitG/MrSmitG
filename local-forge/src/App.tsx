@@ -5,6 +5,7 @@ import { DiffModal } from './components/DiffModal.tsx'
 import { EditorPane } from './components/EditorPane.tsx'
 import { FileTree } from './components/FileTree.tsx'
 import { GitPanel } from './components/GitPanel.tsx'
+import { GraphPanel } from './components/GraphPanel.tsx'
 import { ModelHub } from './components/ModelHub.tsx'
 import { SearchPanel } from './components/SearchPanel.tsx'
 import { SettingsModal } from './components/SettingsModal.tsx'
@@ -53,6 +54,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [diffOpen, setDiffOpen] = useState(false)
   const [diffPreviews, setDiffPreviews] = useState<DiffPreview[]>([])
@@ -448,6 +450,7 @@ export default function App() {
       { id: 'settings', label: 'Open Settings', hint: 'workspace', run: () => setSettingsOpen(true) },
       { id: 'search', label: 'Find in files', hint: '⌘⇧F', run: () => setSearchOpen(true) },
       { id: 'git', label: 'Toggle Git panel', hint: 'scm', run: () => setGitOpen((v) => !v) },
+      { id: 'graph', label: 'Open Graph LLM', hint: 'knowledge graph', run: () => setGraphOpen(true) },
       { id: 'term', label: 'Toggle Terminal', hint: 'shell', run: () => setTerminalOpen((v) => !v) },
       { id: 'shortcuts', label: 'Keyboard shortcuts', run: () => setShortcutsOpen(true) },
       { id: 'save', label: 'Save file', hint: '⌘S', run: () => void saveActive() },
@@ -544,6 +547,9 @@ export default function App() {
           </span>
           <button type="button" className="ghost-btn" onClick={() => setSearchOpen(true)} title="Find">
             Find
+          </button>
+          <button type="button" className="ghost-btn" onClick={() => setGraphOpen(true)} title="Graph LLM">
+            Graph
           </button>
           <button type="button" className="ghost-btn" onClick={() => setGitOpen((v) => !v)}>
             Git
@@ -662,6 +668,12 @@ export default function App() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onOpen={(p) => void openFile(p)}
+      />
+      <GraphPanel
+        open={graphOpen}
+        onClose={() => setGraphOpen(false)}
+        onOpenFile={(p) => void openFile(p)}
+        toast={showToast}
       />
       <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 

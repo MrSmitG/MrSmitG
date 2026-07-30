@@ -1107,3 +1107,89 @@ a {
   display: flex;
   flex-direction: column;
 }
+
+.graph-modal {
+  max-width: min(960px, 100%);
+}
+
+.graph-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.graph-stage {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 12px;
+  min-height: 440px;
+}
+
+.graph-svg {
+  width: 100%;
+  height: 440px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(127, 212, 184, 0.06), transparent 45%),
+    radial-gradient(circle at 70% 80%, rgba(232, 196, 104, 0.05), transparent 40%),
+    var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.graph-edge {
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+
+.graph-edge.kind-imports {
+  stroke: #e8c468;
+}
+
+.graph-edge.kind-calls {
+  stroke: #7fd4b8;
+}
+
+.graph-edge.kind-contains {
+  stroke: #5f7d72;
+}
+
+.graph-edge.kind-extends {
+  stroke: #e0b35c;
+  stroke-dasharray: 4 3;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node text {
+  fill: var(--text-dim);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.graph-node.hit circle {
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(127, 212, 184, 0.55));
+}
+
+.graph-node.selected circle {
+  stroke: var(--brand);
+  stroke-width: 2.5;
+}
+
+.graph-legend {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(7, 20, 17, 0.55);
+}
+
+@media (max-width: 720px) {
+  .graph-stage {
+    grid-template-columns: 1fr;
+  }
+}

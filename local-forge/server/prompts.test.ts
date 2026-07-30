@@ -42,6 +42,7 @@ describe('prompts', () => {
       recentWorkspaces: [],
       activeSessionId: '',
       offlineMode: true,
+      graphLlm: true,
     })
     assert.match(ask, /Mode: ASK/)
     assert.match(ask, /qwen2.5-coder:7b/)

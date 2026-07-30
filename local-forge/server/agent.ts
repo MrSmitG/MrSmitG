@@ -9,11 +9,12 @@ import {
   writeWorkspaceFile,
   type FileNode,
 } from './workspace.ts'
+import { getCachedGraph, queryGraph, readSymbolSnippet } from './graph.ts'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export interface ToolCall {
-  name: 'read_file' | 'search' | 'list_dir' | 'write_file' | 'finish'
+  name: 'read_file' | 'search' | 'list_dir' | 'write_file' | 'query_graph' | 'finish'
   args: Record<string, string>
 }
 
@@ -67,14 +68,15 @@ Available tools:
 - read_file: {"path":"..."}
 - search: {"query":"..."}
 - list_dir: {"path":""}  (optional path prefix; empty = root)
+- query_graph: {"query":"symbol or concept"}  (Graph LLM — codebase knowledge graph)
 - write_file: {"path":"...","content":"full file contents"}
 - finish: {"summary":"what you did"}
 
 Rules:
-- Prefer search/read before writing.
+- Prefer query_graph or search/read before writing.
 - After enough context, write_file for each change, then finish.
 - Keep write_file contents complete (full file).
-- Do not invent paths; list_dir or search first if unsure.
+- Do not invent paths; list_dir, search, or query_graph first if unsure.
 `
 
 function parseTool(text: string): ToolCall | null {
@@ -220,6 +222,19 @@ function runTool(
         edit: { path, content },
       }
     }
+    case 'query_graph': {
+      const graph = getCachedGraph(workspacePath)
+      const q = tool.args.query || ''
+      const { hits, context } = queryGraph(graph, q, 10)
+      const snippets: string[] = []
+      for (const hit of hits.slice(0, 5)) {
+        const snip = readSymbolSnippet(workspacePath, hit.node)
+        if (snip) snippets.push(`### ${hit.node.label} (${hit.node.path})\n\`\`\`\n${snip}\n\`\`\``)
+      }
+      return {
+        result: `${context}\n\n${snippets.join('\n\n')}`.slice(0, 12000),
+      }
+    }
     case 'finish':
       return { result: tool.args.summary || 'Done' }
     default:
@@ -246,9 +261,17 @@ export async function runAgentLoop(opts: {
     12000,
   )
 
+  let graphContext = ''
+  if (config.graphLlm) {
+    const graph = getCachedGraph(config.workspacePath)
+    graphContext = queryGraph(graph, opts.prompt, 8).context
+  }
+
   const system = `${buildSystemPrompt(opts.mode, config)}
 
 ${TOOL_INSTRUCTIONS}
+
+${config.graphLlm ? 'Graph LLM is enabled — prefer query_graph for structural questions about symbols/imports/calls.' : ''}
 
 ${rules ? `Project rules:\n${rules}` : ''}
 `
@@ -261,6 +284,7 @@ ${rules ? `Project rules:\n${rules}` : ''}
       content: [
         opts.activeFile ? `Active file: ${opts.activeFile}` : '',
         opts.selection ? `Selection:\n\`\`\`\n${opts.selection}\n\`\`\`` : '',
+        graphContext || '',
         context ? `Open context (truncated):\n${context}` : '',
         `Goal:\n${opts.prompt}`,
         'Begin by using tools. End with finish.',

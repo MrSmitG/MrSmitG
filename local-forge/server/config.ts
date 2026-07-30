@@ -24,6 +24,8 @@ export interface AppConfig {
   activeSessionId: string
   /** Air-gapped mode: no model downloads, localhost providers only, no cloud calls. */
   offlineMode: boolean
+  /** Use codebase knowledge graph (Graph LLM) for retrieval + agent context. */
+  graphLlm: boolean
 }
 
 const DEFAULTS: AppConfig = {
@@ -40,6 +42,7 @@ const DEFAULTS: AppConfig = {
   recentWorkspaces: [],
   activeSessionId: '',
   offlineMode: true,
+  graphLlm: true,
 }
 
 function ensureConfigFile(): void {

@@ -23,6 +23,7 @@ Cursor itself is closed-source; LocalForge is an open alternative with the same 
 | SCM | Git status / diff panel |
 | Find | Find in files (⌘⇧F) |
 | Ghost text | Tab autocomplete from local model |
+| **Graph LLM** | Code knowledge graph + GraphRAG for Ask/Edit/Agent |
 
 Also included:
 

@@ -1,8 +1,8 @@
 {
   "name": "local-forge",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Cursor-style local LLM IDE fork — offline-first Ask/Edit/Agent with Model Hub",
+  "description": "Cursor-style local LLM IDE fork with Graph LLM and offline-first agents",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/vendor-monaco.mjs",

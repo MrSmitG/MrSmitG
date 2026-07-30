@@ -10,6 +10,7 @@ const ROWS = [
   ['⌘/Ctrl + `', 'Toggle terminal'],
   ['⌘/Ctrl + Shift + F', 'Find in files'],
   ['⌘/Ctrl + Enter', 'Send chat'],
+  ['Graph button', 'Open Graph LLM knowledge graph'],
   ['Esc', 'Close overlays'],
 ]
 

@@ -36,6 +36,12 @@ import {
 import { gitDiff, gitStatus } from './git.ts'
 import { completePrefix } from './autocomplete.ts'
 import {
+  getCachedGraph,
+  queryGraph,
+  readSymbolSnippet,
+  subgraphForView,
+} from './graph.ts'
+import {
   deleteWorkspaceFile,
   gatherContextFiles,
   listTree,
@@ -49,7 +55,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
-const VERSION = '0.4.0'
+const VERSION = '0.5.0'
 
 const app = express()
 app.use(cors())
@@ -94,6 +100,7 @@ app.get('/api/health', async (_req, res) => {
       'git-status',
       'find-in-files',
       'tab-autocomplete',
+      'graph-llm',
     ],
   })
 })
@@ -366,15 +373,36 @@ app.post('/api/chat', async (req, res) => {
     [activeFile, ...openFiles, ...mentionedFiles].filter(Boolean) as string[],
   )
 
+  let graphBlock = ''
+  if (config.graphLlm) {
+    const graph = getCachedGraph(config.workspacePath)
+    const { context: gctx, hits } = queryGraph(graph, prompt, 8)
+    const snippets: string[] = []
+    for (const hit of hits.slice(0, 4)) {
+      const snip = readSymbolSnippet(config.workspacePath, hit.node)
+      if (snip) snippets.push(`### ${hit.node.label}\n\`\`\`\n${snip}\n\`\`\``)
+    }
+    graphBlock = [gctx, ...snippets].filter(Boolean).join('\n\n')
+  }
+
   const messages = [
     {
       role: 'system',
-      content: `${buildSystemPrompt(mode, config)}${rules ? `\n\nProject rules:\n${rules}` : ''}`,
+      content: `${buildSystemPrompt(mode, config)}${rules ? `\n\nProject rules:\n${rules}` : ''}${
+        config.graphLlm
+          ? '\n\nGraph LLM is enabled: use the knowledge-graph context when reasoning about symbols and dependencies.'
+          : ''
+      }`,
     },
     ...history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
     {
       role: 'user',
-      content: buildUserPayload({ prompt, context, selection, activeFile }),
+      content: buildUserPayload({
+        prompt,
+        context: [graphBlock, context].filter(Boolean).join('\n\n'),
+        selection,
+        activeFile,
+      }),
     },
   ]
 
@@ -584,6 +612,45 @@ app.post('/api/complete', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Complete failed', completion: '' })
   }
+})
+
+
+app.get('/api/graph', (req, res) => {
+  const config = cfg()
+  const force = String(req.query.rebuild || '') === '1'
+  const graph = getCachedGraph(config.workspacePath, force)
+  const q = String(req.query.q || '')
+  const hitIds = q ? queryGraph(graph, q, 16).hits.map((h) => h.node.id) : []
+  const view = subgraphForView(graph, hitIds)
+  res.json({
+    builtAt: graph.builtAt,
+    stats: graph.stats,
+    query: q || null,
+    hitIds,
+    nodes: view.nodes,
+    edges: view.edges,
+    graphLlm: config.graphLlm,
+  })
+})
+
+app.post('/api/graph/query', (req, res) => {
+  const config = cfg()
+  const { query, limit } = req.body as { query?: string; limit?: number }
+  if (!query?.trim()) return res.status(400).json({ error: 'query required' })
+  const graph = getCachedGraph(config.workspacePath)
+  const result = queryGraph(graph, query, limit || 12)
+  const snippets = result.hits.slice(0, 6).map((h) => ({
+    node: h.node,
+    score: h.score,
+    snippet: readSymbolSnippet(config.workspacePath, h.node),
+  }))
+  res.json({ ...result, snippets, stats: graph.stats })
+})
+
+app.post('/api/graph/rebuild', (_req, res) => {
+  const config = cfg()
+  const graph = getCachedGraph(config.workspacePath, true)
+  res.json({ ok: true, stats: graph.stats, builtAt: graph.builtAt })
 })
 
 app.post('/api/edits/apply', (req, res) => {

@@ -15,6 +15,7 @@ export interface AppConfig {
   recentWorkspaces?: string[]
   activeSessionId?: string
   offlineMode?: boolean
+  graphLlm?: boolean
 }
 
 export interface FileNode {
@@ -241,6 +242,55 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => json<{ completion: string }>(r)),
+  getGraph: (q = '', rebuild = false) =>
+    fetch(
+      `/api/graph?q=${encodeURIComponent(q)}${rebuild ? '&rebuild=1' : ''}`,
+    ).then((r) => json<GraphView>(r)),
+  queryGraph: (query: string, limit = 12) =>
+    fetch('/api/graph/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+    }).then((r) =>
+      json<{
+        hits: Array<{ node: GraphNode; score: number }>
+        context: string
+        snippets: Array<{ node: GraphNode; score: number; snippet: string }>
+        stats: GraphView['stats']
+      }>(r),
+    ),
+  rebuildGraph: () =>
+    fetch('/api/graph/rebuild', { method: 'POST' }).then((r) =>
+      json<{ ok: boolean; stats: GraphView['stats']; builtAt: string }>(r),
+    ),
+}
+
+export interface GraphNode {
+  id: string
+  kind: 'file' | 'symbol' | 'module'
+  label: string
+  path?: string
+  detail?: string
+  line?: number
+  language?: string
+}
+
+export interface GraphEdge {
+  id: string
+  from: string
+  to: string
+  kind: string
+  weight?: number
+}
+
+export interface GraphView {
+  builtAt: string
+  stats: { files: number; symbols: number; edges: number }
+  query: string | null
+  hitIds: string[]
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  graphLlm: boolean
 }
 
 export type StreamHandlers = {

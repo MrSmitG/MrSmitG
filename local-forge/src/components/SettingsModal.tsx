@@ -14,6 +14,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
   const [offlineMode, setOfflineMode] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
   const [tabAutocomplete, setTabAutocomplete] = useState(true)
+  const [graphLlm, setGraphLlm] = useState(true)
   const [recent, setRecent] = useState<string[]>([])
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
       setOfflineMode(c.offlineMode !== false)
       setAutoSave(c.autoSave !== false)
       setTabAutocomplete(c.tabAutocomplete !== false)
+      setGraphLlm(c.graphLlm !== false)
       setRecent(c.recentWorkspaces ?? [])
     })
   }, [open])
@@ -104,6 +106,16 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
             />
             <span>Tab autocomplete (ghost text from local model)</span>
           </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={graphLlm}
+              onChange={(e) => setGraphLlm(e.target.checked)}
+            />
+            <span>
+              <strong>Graph LLM</strong> — knowledge-graph retrieval for symbols / imports / calls
+            </span>
+          </label>
           <button
             type="button"
             className="primary-btn"
@@ -116,6 +128,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
                   offlineMode,
                   autoSave,
                   tabAutocomplete,
+                  graphLlm,
                 })
                 .then((c) => {
                   onConfigChange(c)
