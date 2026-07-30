@@ -37,6 +37,11 @@ describe('prompts', () => {
       workspacePath: '/tmp/ws',
       temperature: 0.2,
       contextWindowHint: 8192,
+      autoSave: true,
+      tabAutocomplete: true,
+      recentWorkspaces: [],
+      activeSessionId: '',
+      offlineMode: true,
     })
     assert.match(ask, /Mode: ASK/)
     assert.match(ask, /qwen2.5-coder:7b/)

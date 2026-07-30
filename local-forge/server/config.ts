@@ -18,6 +18,12 @@ export interface AppConfig {
   workspacePath: string
   temperature: number
   contextWindowHint: number
+  autoSave: boolean
+  tabAutocomplete: boolean
+  recentWorkspaces: string[]
+  activeSessionId: string
+  /** Air-gapped mode: no model downloads, localhost providers only, no cloud calls. */
+  offlineMode: boolean
 }
 
 const DEFAULTS: AppConfig = {
@@ -29,6 +35,11 @@ const DEFAULTS: AppConfig = {
   workspacePath: join(ROOT, 'demo-workspace'),
   temperature: 0.2,
   contextWindowHint: 8192,
+  autoSave: true,
+  tabAutocomplete: true,
+  recentWorkspaces: [],
+  activeSessionId: '',
+  offlineMode: true,
 }
 
 function ensureConfigFile(): void {
@@ -50,7 +61,15 @@ export function loadConfig(): AppConfig {
 }
 
 export function saveConfig(patch: Partial<AppConfig>): AppConfig {
-  const next = { ...loadConfig(), ...patch }
+  const prev = loadConfig()
+  const next = { ...prev, ...patch }
+  if (patch.workspacePath && patch.workspacePath !== prev.workspacePath) {
+    const recent = [
+      patch.workspacePath,
+      ...prev.recentWorkspaces.filter((p) => p !== patch.workspacePath),
+    ].slice(0, 8)
+    next.recentWorkspaces = recent
+  }
   ensureConfigFile()
   writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2))
   if (next.modelsPath && !existsSync(next.modelsPath)) {

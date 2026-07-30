@@ -21,7 +21,8 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
   const [modelsPath, setModelsPath] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
-  const [provider, setProvider] = useState<ProviderKind>('ollama')
+  const [provider, setProvider] = useState<ProviderKind>('demo')
+  const [offlineMode, setOfflineMode] = useState(true)
   const [pulling, setPulling] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('')
@@ -37,6 +38,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
       setBaseUrl(c.baseUrl)
       setApiKey(c.apiKey)
       setProvider(c.provider)
+      setOfflineMode(c.offlineMode !== false)
       onConfigChange(c)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to load models')
@@ -60,14 +62,48 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
   }
 
   const saveProvider = async () => {
-    const next = await api.saveConfig({ provider, baseUrl, apiKey })
-    setConfig(next)
-    onConfigChange(next)
-    toast(`Provider: ${next.provider}`)
-    await refresh()
+    try {
+      const next = await api.saveConfig({ provider, baseUrl, apiKey, offlineMode })
+      setConfig(next)
+      onConfigChange(next)
+      toast(
+        next.offlineMode
+          ? 'Offline mode on — localhost only, downloads blocked'
+          : `Provider: ${next.provider}`,
+      )
+      await refresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save')
+    }
+  }
+
+  const toggleOffline = async (value: boolean) => {
+    setOfflineMode(value)
+    try {
+      const patch: Partial<AppConfig> = { offlineMode: value }
+      if (value && provider !== 'demo' && !/^https?:\/\/(127\.0\.0\.1|localhost)/i.test(baseUrl) && !baseUrl.startsWith('local://')) {
+        patch.provider = 'demo'
+        patch.baseUrl = 'local://demo'
+        patch.selectedModel = 'demo-coder'
+        setProvider('demo')
+        setBaseUrl('local://demo')
+      }
+      const next = await api.saveConfig(patch)
+      setConfig(next)
+      setOfflineMode(next.offlineMode !== false)
+      onConfigChange(next)
+      toast(value ? 'Offline mode enabled (no internet)' : 'Offline mode disabled — downloads allowed')
+      await refresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to toggle offline mode')
+    }
   }
 
   const pull = async (ollamaName: string, label: string) => {
+    if (offlineMode) {
+      toast('Offline mode blocks downloads. Turn it off to pull models, then turn it back on.')
+      return
+    }
     setPulling(ollamaName)
     setProgress(0)
     setStatus(`Starting download of ${label}…`)
@@ -78,9 +114,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
         toast(e.error)
         setStatus(e.error)
       }
-      if (e.done && !e.error) {
-        toast(`${ollamaName} ready`)
-      }
+      if (e.done && !e.error) toast(`${ollamaName} ready`)
     })
     setPulling(null)
     await refresh()
@@ -98,8 +132,8 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
           <div>
             <h2 id="hub-title">Model Hub</h2>
             <p>
-              Choose where models live on disk, connect a local runtime, and download coding models.
-              Nothing is sent to cloud APIs.
+              Local providers only. Enable <strong>Offline mode</strong> for air-gapped use — no
+              downloads, no cloud calls, localhost engines only.
             </p>
           </div>
           <button type="button" className="ghost-btn" onClick={onClose}>
@@ -107,8 +141,26 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
           </button>
         </div>
         <div className="modal-body">
+          <div className={`offline-banner ${offlineMode ? 'on' : ''}`}>
+            <div>
+              <strong>{offlineMode ? 'Offline mode ON' : 'Offline mode OFF'}</strong>
+              <p className="hint" style={{ margin: '4px 0 0' }}>
+                {offlineMode
+                  ? 'No internet used. Downloads blocked. Use Offline engine, or Ollama/LM Studio on this machine with models you already have.'
+                  : 'Downloads allowed. After pulling models, turn Offline mode back on for air-gapped work.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className={offlineMode ? 'primary-btn' : 'ghost-btn'}
+              onClick={() => void toggleOffline(!offlineMode)}
+            >
+              {offlineMode ? 'Disable' : 'Enable offline'}
+            </button>
+          </div>
+
           <div className="field">
-            <label htmlFor="models-path">Model download location</label>
+            <label htmlFor="models-path">Model storage location</label>
             <div className="field-row">
               <input
                 id="models-path"
@@ -121,8 +173,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
               </button>
             </div>
             <span className="hint">
-              Used as <code>OLLAMA_MODELS</code> when pulling via Ollama. Pick any folder you have
-              space for (SSD recommended).
+              Used as <code>OLLAMA_MODELS</code> when pulling via Ollama (requires offline mode off).
             </span>
           </div>
 
@@ -140,20 +191,25 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
                 if (p === 'demo') setBaseUrl('local://demo')
               }}
             >
-              <option value="ollama">Ollama (download + run)</option>
-              <option value="lmstudio">LM Studio</option>
-              <option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, …)</option>
-              <option value="demo">Demo (offline UI preview)</option>
+              <option value="demo">Offline engine (built-in, no internet, no GPU)</option>
+              <option value="ollama">Ollama (localhost)</option>
+              <option value="lmstudio">LM Studio (localhost)</option>
+              <option value="openai-compatible">OpenAI-compatible localhost (llama.cpp, vLLM…)</option>
             </select>
           </div>
 
           <div className="field">
-            <label htmlFor="base-url">Base URL</label>
-            <input id="base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+            <label htmlFor="base-url">Base URL (localhost only when offline)</label>
+            <input
+              id="base-url"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              disabled={provider === 'demo'}
+            />
           </div>
 
           <div className="field">
-            <label htmlFor="api-key">API key (optional)</label>
+            <label htmlFor="api-key">API key (optional, local only)</label>
             <input
               id="api-key"
               value={apiKey}
@@ -168,8 +224,8 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
 
           {models?.providerError && (
             <p style={{ color: 'var(--warn)', fontSize: '0.8rem', marginTop: 14 }}>
-              Provider offline: {models.providerError}. Start Ollama (`ollama serve`) or LM Studio,
-              then refresh.
+              Provider unreachable: {models.providerError}. Start Ollama (`ollama serve`) or LM
+              Studio, or switch to Offline engine.
             </p>
           )}
 
@@ -184,7 +240,15 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
             </div>
           )}
 
-          <h3 className="section-title">Download catalog</h3>
+          <h3 className="section-title">
+            {offlineMode ? 'Catalog (downloads locked)' : 'Download catalog'}
+          </h3>
+          {offlineMode && (
+            <p className="hint">
+              Turn offline mode off to download. Already-installed models below still work fully
+              offline.
+            </p>
+          )}
           <div className="catalog-grid">
             {(models?.catalog ?? []).map((m) => (
               <article
@@ -219,10 +283,11 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
                     <button
                       type="button"
                       className="primary-btn"
-                      disabled={!!pulling || provider !== 'ollama'}
+                      disabled={!!pulling || provider !== 'ollama' || offlineMode}
                       onClick={() => void pull(m.ollamaName, m.name)}
+                      title={offlineMode ? 'Disable offline mode to download' : undefined}
                     >
-                      {pulling === m.ollamaName ? 'Downloading…' : 'Download'}
+                      {offlineMode ? 'Locked' : pulling === m.ollamaName ? 'Downloading…' : 'Download'}
                     </button>
                   )}
                 </div>
@@ -230,7 +295,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
             ))}
           </div>
 
-          <h3 className="section-title">Installed on provider</h3>
+          <h3 className="section-title">Installed / available offline</h3>
           <div className="installed-list">
             {(models?.installed ?? []).length === 0 && (
               <p className="hint">{loading ? 'Loading…' : 'No models detected yet.'}</p>
@@ -255,7 +320,7 @@ export function ModelHub({ open, onClose, onConfigChange, toast }: Props) {
                   >
                     Select
                   </button>
-                  {provider === 'ollama' && (
+                  {provider === 'ollama' && !offlineMode && (
                     <button
                       type="button"
                       className="danger-btn"

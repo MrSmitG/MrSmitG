@@ -11,12 +11,16 @@ interface Props {
 export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
   const [workspacePath, setWorkspacePath] = useState('')
   const [temperature, setTemperature] = useState(0.2)
+  const [offlineMode, setOfflineMode] = useState(true)
+  const [autoSave, setAutoSave] = useState(true)
 
   useEffect(() => {
     if (!open) return
     void api.getConfig().then((c) => {
       setWorkspacePath(c.workspacePath)
       setTemperature(c.temperature)
+      setOfflineMode(c.offlineMode !== false)
+      setAutoSave(c.autoSave !== false)
     })
   }, [open])
 
@@ -28,7 +32,7 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
         <div className="modal-header">
           <div>
             <h2>Settings</h2>
-            <p>Point LocalForge at a project folder on this machine.</p>
+            <p>Workspace + air-gapped offline controls.</p>
           </div>
           <button type="button" className="ghost-btn" onClick={onClose}>
             Close
@@ -56,15 +60,40 @@ export function SettingsModal({ open, onClose, onConfigChange, toast }: Props) {
               onChange={(e) => setTemperature(Number(e.target.value))}
             />
           </div>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={offlineMode}
+              onChange={(e) => setOfflineMode(e.target.checked)}
+            />
+            <span>
+              <strong>Offline mode</strong> — no internet, block model downloads, localhost
+              providers only
+            </span>
+          </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={autoSave}
+              onChange={(e) => setAutoSave(e.target.checked)}
+            />
+            <span>Auto-save open files after edits apply</span>
+          </label>
           <button
             type="button"
             className="primary-btn"
+            style={{ marginTop: 12 }}
             onClick={() =>
-              void api.saveConfig({ workspacePath, temperature }).then((c) => {
-                onConfigChange(c)
-                toast('Settings saved')
-                onClose()
-              })
+              void api
+                .saveConfig({ workspacePath, temperature, offlineMode, autoSave })
+                .then((c) => {
+                  onConfigChange(c)
+                  toast(c.offlineMode ? 'Saved (offline mode on)' : 'Settings saved')
+                  onClose()
+                })
+                .catch((err: unknown) =>
+                  toast(err instanceof Error ? err.message : 'Save failed'),
+                )
             }
           >
             Save

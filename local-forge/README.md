@@ -16,37 +16,53 @@ Cursor itself is closed-source; LocalForge is an open alternative with the same 
 | Terminal | ⌘/Ctrl+` workspace shell |
 | Model picker | Model Hub catalog + installed models |
 | Project rules | `.localforgerules` |
-| Cloud models | **Replaced by local models you download** |
+| Cloud models | **Replaced by local / offline engines** |
+| Air-gapped use | **Offline mode** — no internet, no CDN, localhost only |
 
 Also included:
 
-- **Choose model download location** (saved as config; used as `OLLAMA_MODELS` when pulling)
+- **Offline mode** (default on): blocks model downloads, rejects non-localhost providers, ships fonts + Monaco locally (no Google/jsDelivr)
+- **Offline engine** (`demo` provider): works with zero GPU and zero network
+- **Choose model download location** (used as `OLLAMA_MODELS` when you temporarily disable offline mode to pull)
 - File tree + Monaco editor + tabs
 - Streaming responses over SSE
 - Demo workspace so you can try immediately
 
 ## Quick start
 
-### 1. Install a local LLM runtime
-
-**Option A — Ollama (recommended for downloads)**
+### Fully offline (no internet)
 
 ```bash
-# https://ollama.com
+cd local-forge
+npm install   # once, while you have network — or copy node_modules from another machine
+npm run dev
+```
+
+1. Open Model Hub — **Offline mode** should be ON
+2. Provider: **Offline engine** (or Ollama/LM Studio on `127.0.0.1` with models already on disk)
+3. Code — nothing leaves the machine
+
+> Tip: to download a new Ollama model, temporarily disable Offline mode, pull, then turn Offline mode back on.
+
+### 1. Install a local LLM runtime (optional for real models)
+
+**Option A — Ollama (localhost)**
+
+```bash
 ollama serve
 ```
 
-**Option B — LM Studio**
+**Option B — LM Studio (localhost)**
 
 Start the local server (default `http://127.0.0.1:1234/v1`).
 
-**Option C — llama.cpp / vLLM / etc.**
+**Option C — llama.cpp / vLLM / etc. on localhost**
 
-Any OpenAI-compatible `/v1/chat/completions` endpoint.
+Any OpenAI-compatible `/v1/chat/completions` endpoint on `127.0.0.1`.
 
-**Option D — Demo provider**
+**Option D — Offline engine (built-in)**
 
-LocalForge ships with a `demo` provider so you can explore the UI without a GPU or model download. Switch to Ollama in Model Hub for real inference.
+No GPU, no model files, no internet. Good for UI + agent-flow testing; switch to Ollama for real coding quality.
 
 ### 2. Run LocalForge
 
@@ -85,8 +101,9 @@ Open files from the demo workspace (or set your project path in **Settings**), t
 
 Stored in `local-forge/.local-forge/config.json`:
 
-- `provider` — `ollama` | `lmstudio` | `openai-compatible`
-- `baseUrl` — local server URL
+- `provider` — `demo` (offline engine) | `ollama` | `lmstudio` | `openai-compatible`
+- `offlineMode` — when `true`, block downloads and non-localhost providers
+- `baseUrl` — local server URL (`127.0.0.1` / `localhost` required in offline mode)
 - `modelsPath` — where downloads should live
 - `workspacePath` — project root LocalForge can read/write
 - `selectedModel` — active model id

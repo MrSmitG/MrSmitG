@@ -36,17 +36,24 @@ function flattenFiles(nodes: FileNode[]): string[] {
 }
 
 export function loadProjectRules(workspacePath: string): string {
-  for (const name of ['.localforgerules', '.localforge/rules.md', 'LOCALFORGE.md']) {
+  const chunks: string[] = []
+  for (const name of [
+    '.localforgerules',
+    '.cursorrules',
+    '.localforge/rules.md',
+    'LOCALFORGE.md',
+    '.cursor/rules.md',
+  ]) {
     const p = join(workspacePath, name)
     if (existsSync(p)) {
       try {
-        return readFileSync(p, 'utf8').slice(0, 8000)
+        chunks.push(`# From ${name}\n${readFileSync(p, 'utf8').slice(0, 6000)}`)
       } catch {
         /* skip */
       }
     }
   }
-  return ''
+  return chunks.join('\n\n').slice(0, 12000)
 }
 
 const TOOL_INSTRUCTIONS = `You are operating as a coding AGENT with tools.

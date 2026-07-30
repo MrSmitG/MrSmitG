@@ -1007,11 +1007,52 @@ a {
   border-top: 1px solid var(--line);
 }
 
-.terminal-input input {
-  flex: 1;
-  background: var(--bg-deep);
+.offline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 10px;
-  outline: none;
+  background: rgba(7, 20, 17, 0.55);
+  margin-bottom: 16px;
+}
+
+.offline-banner.on {
+  border-color: rgba(127, 212, 184, 0.45);
+  background: rgba(61, 143, 120, 0.12);
+}
+
+.offline-banner strong {
+  color: var(--brand-soft);
+}
+
+.offline-banner.on strong {
+  color: var(--accent);
+}
+
+.check-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 10px 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.check-row input {
+  margin-top: 3px;
+}
+
+.offline-pill {
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 212, 184, 0.35);
+  color: var(--accent);
+  background: rgba(61, 143, 120, 0.12);
 }

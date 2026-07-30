@@ -17,6 +17,7 @@ import {
 import { loadProjectRules, runAgentLoop } from './agent.ts'
 import { buildSystemPrompt, buildUserPayload, parseEditFences, type AgentMode } from './prompts.ts'
 import { runTerminalCommand } from './terminal.ts'
+import { assertCanUseInternet, assertLocalProvider, isLocalBaseUrl } from './offline.ts'
 import {
   deleteWorkspaceFile,
   gatherContextFiles,
@@ -31,7 +32,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 
 const app = express()
 app.use(cors())
@@ -56,8 +57,10 @@ app.get('/api/health', async (_req, res) => {
       selectedModel: config.selectedModel,
       modelsPath: config.modelsPath,
       workspacePath: config.workspacePath,
+      offlineMode: config.offlineMode,
     },
     provider: health,
+    offlineMode: config.offlineMode,
     features: [
       'ask',
       'edit',
@@ -68,6 +71,7 @@ app.get('/api/health', async (_req, res) => {
       'command-palette',
       'diff-preview',
       'project-rules',
+      'offline-mode',
     ],
   })
 })
@@ -77,18 +81,34 @@ app.get('/api/config', (_req, res) => {
 })
 
 app.put('/api/config', (req, res) => {
-  const body = req.body as Partial<AppConfig> & { provider?: ProviderKind }
-  const patch: Partial<AppConfig> = { ...body }
-  if (body.provider && !body.baseUrl) {
-    Object.assign(patch, providerDefaults(body.provider))
+  try {
+    const body = req.body as Partial<AppConfig> & { provider?: ProviderKind }
+    const patch: Partial<AppConfig> = { ...body }
+    if (body.provider && !body.baseUrl) {
+      Object.assign(patch, providerDefaults(body.provider))
+    }
+    if (body.provider === 'demo' && !body.selectedModel) {
+      patch.selectedModel = 'demo-coder'
+    }
+
+    const current = cfg()
+    const nextOffline = patch.offlineMode ?? current.offlineMode
+    const nextBase = patch.baseUrl ?? current.baseUrl
+    if (nextOffline) {
+      assertLocalProvider(nextBase, true)
+      // Remote URLs are rejected; keep users on local engines only.
+      if (patch.baseUrl && !isLocalBaseUrl(patch.baseUrl)) {
+        return res.status(400).json({ error: 'Offline mode allows localhost providers only' })
+      }
+    }
+
+    const next = saveConfig(patch)
+    seedDemoWorkspace(next.workspacePath)
+    ensureModelsPath(next.modelsPath)
+    res.json(next)
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Config update failed' })
   }
-  if (body.provider === 'demo' && !body.selectedModel) {
-    patch.selectedModel = 'demo-coder'
-  }
-  const next = saveConfig(patch)
-  seedDemoWorkspace(next.workspacePath)
-  ensureModelsPath(next.modelsPath)
-  res.json(next)
 })
 
 app.get('/api/models', async (_req, res) => {
@@ -113,6 +133,7 @@ app.get('/api/models', async (_req, res) => {
     provider: config.provider,
     selectedModel: config.selectedModel,
     modelsPath: config.modelsPath,
+    offlineMode: config.offlineMode,
     installed,
     disk,
     catalog,
@@ -132,6 +153,12 @@ app.post('/api/models/pull', async (req, res) => {
   const { model, ollamaName } = req.body as { model?: string; ollamaName?: string }
   const name = ollamaName || model
   if (!name) return res.status(400).json({ error: 'model name required' })
+
+  try {
+    assertCanUseInternet(config.offlineMode, 'downloading models')
+  } catch (err) {
+    return res.status(403).json({ error: err instanceof Error ? err.message : 'Blocked by offline mode' })
+  }
 
   if (config.provider !== 'ollama') {
     return res.status(400).json({

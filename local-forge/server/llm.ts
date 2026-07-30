@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AppConfig, ProviderKind } from './config.ts'
+import { assertCanUseInternet, assertLocalProvider } from './offline.ts'
 
 export interface LocalModel {
   id: string
@@ -186,11 +187,13 @@ export async function checkProviderHealth(config: AppConfig): Promise<{
 }
 
 export async function listInstalledModels(config: AppConfig): Promise<LocalModel[]> {
+  assertLocalProvider(config.baseUrl, config.offlineMode)
+
   if (config.provider === 'demo') {
     return [
       {
         id: 'demo-coder',
-        name: 'demo-coder',
+        name: 'offline-engine (demo-coder)',
         source: 'catalog',
         installed: true,
       },
@@ -297,7 +300,7 @@ This ran on the **demo** provider (no GPU required). Switch to Ollama in Model H
 Your request:
 > ${request.slice(0, 400)}
 
-Connect **Ollama** or **LM Studio** in Model Hub, download a coding model to your chosen folder, and select it for real local inference. Demo mode is only for UI/agent-flow testing.`
+Connect **Ollama** or **LM Studio** on localhost (with Offline mode on) after models are already downloaded. Or stay on this Offline engine for air-gapped UI testing.`
 }
 
 export async function chatCompletion(
@@ -309,6 +312,7 @@ export async function chatCompletion(
     model?: string
   },
 ): Promise<Response> {
+  assertLocalProvider(config.baseUrl, config.offlineMode)
   const model = body.model || config.selectedModel
   if (!model && config.provider !== 'demo') {
     throw new Error('No model selected. Open Model Hub and choose or download one.')
@@ -377,6 +381,7 @@ export async function pullOllamaModel(
   modelName: string,
   onProgress: ProgressListener,
 ): Promise<void> {
+  assertCanUseInternet(config.offlineMode, 'downloading models')
   ensureModelsPath(config.modelsPath)
 
   const key = modelName

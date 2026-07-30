@@ -10,6 +10,11 @@ export interface AppConfig {
   workspacePath: string
   temperature: number
   contextWindowHint: number
+  autoSave?: boolean
+  tabAutocomplete?: boolean
+  recentWorkspaces?: string[]
+  activeSessionId?: string
+  offlineMode?: boolean
 }
 
 export interface FileNode {
@@ -44,6 +49,7 @@ export interface ModelsResponse {
   provider: ProviderKind
   selectedModel: string
   modelsPath: string
+  offlineMode?: boolean
   installed: LocalModel[]
   disk: LocalModel[]
   catalog: CatalogModel[]
@@ -53,10 +59,11 @@ export interface ModelsResponse {
 export interface HealthResponse {
   app: string
   version: string
+  offlineMode?: boolean
   config: Pick<
     AppConfig,
     'provider' | 'baseUrl' | 'selectedModel' | 'modelsPath' | 'workspacePath'
-  >
+  > & { offlineMode?: boolean }
   provider: { ok: boolean; provider: ProviderKind; message: string; models: number }
   features?: string[]
 }

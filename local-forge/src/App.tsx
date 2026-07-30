@@ -390,6 +390,7 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
+          {config?.offlineMode !== false && <span className="offline-pill">offline</span>}
           <span
             className={`status-dot ${providerOk ? 'ok' : ''}`}
             title={providerOk ? 'Local provider online' : 'Local provider offline'}

@@ -9,3 +9,4 @@ workspace-data
 coverage
 *.tsbuildinfo
 demo-workspace
+public/monaco
