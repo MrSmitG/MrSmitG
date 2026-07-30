@@ -8,10 +8,14 @@ Cursor itself is closed-source; LocalForge is an open alternative with the same 
 
 | Cursor-style feature | LocalForge |
 |---|---|
-| Ask / Chat | Ask mode with workspace context |
+| Ask / Chat | Ask mode with workspace context + `@file` mentions |
 | Inline edit (⌘/Ctrl+K) | Editor bottom bar + keyboard shortcut |
-| Composer / Agent | Edit + Agent modes with applyable file edits |
+| Composer / Agent | Edit mode + **Agent tool loop** (read/search/list/write/finish) |
+| Diff review | Diff preview before apply |
+| Command palette | ⌘/Ctrl+P |
+| Terminal | ⌘/Ctrl+` workspace shell |
 | Model picker | Model Hub catalog + installed models |
+| Project rules | `.localforgerules` |
 | Cloud models | **Replaced by local models you download** |
 
 Also included:

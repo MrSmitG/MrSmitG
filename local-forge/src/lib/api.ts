@@ -58,11 +58,28 @@ export interface HealthResponse {
     'provider' | 'baseUrl' | 'selectedModel' | 'modelsPath' | 'workspacePath'
   >
   provider: { ok: boolean; provider: ProviderKind; message: string; models: number }
+  features?: string[]
 }
 
 export interface ChatEdit {
   path: string
   content: string
+}
+
+export interface DiffPreview {
+  path: string
+  before: string
+  after: string
+  isNew: boolean
+}
+
+export interface TerminalResult {
+  command: string
+  cwd: string
+  exitCode: number | null
+  stdout: string
+  stderr: string
+  truncated: boolean
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -105,16 +122,46 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, content }),
     }).then((r) => json<{ path: string }>(r)),
+  createFile: (path: string, content = '') =>
+    fetch('/api/workspace/file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content }),
+    }).then((r) => json<{ path: string }>(r)),
+  deleteFile: (path: string) =>
+    fetch(`/api/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' }).then((r) =>
+      json<{ ok: boolean }>(r),
+    ),
   search: (q: string) =>
     fetch(`/api/workspace/search?q=${encodeURIComponent(q)}`).then((r) =>
       json<{ hits: Array<{ path: string; line: number; preview: string }> }>(r),
     ),
+  rules: () => fetch('/api/workspace/rules').then((r) => json<{ rules: string }>(r)),
   applyEdits: (edits: ChatEdit[]) =>
     fetch('/api/edits/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ edits }),
     }).then((r) => json<{ applied: string[] }>(r)),
+  previewEdits: (edits: ChatEdit[]) =>
+    fetch('/api/edits/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ edits }),
+    }).then((r) => json<{ previews: DiffPreview[] }>(r)),
+  terminal: (command: string) =>
+    fetch('/api/terminal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+    }).then((r) => json<TerminalResult>(r)),
+}
+
+export type StreamHandlers = {
+  onToken: (t: string) => void
+  onTool?: (name: string, detail?: string) => void
+  onDone: (full: string, edits: ChatEdit[], applied: string[]) => void
+  onError: (msg: string) => void
 }
 
 export async function streamChat(
@@ -126,17 +173,16 @@ export async function streamChat(
     activeFile?: string
     selection?: string
     applyEdits?: boolean
+    mentionedFiles?: string[]
   },
-  handlers: {
-    onToken: (t: string) => void
-    onDone: (full: string, edits: ChatEdit[], applied: string[]) => void
-    onError: (msg: string) => void
-  },
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   })
   if (!res.ok || !res.body) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
@@ -147,6 +193,7 @@ export async function streamChat(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let collectedEdits: ChatEdit[] = []
 
   while (true) {
     const { done, value } = await reader.read()
@@ -163,11 +210,26 @@ export async function streamChat(
           content?: string
           edits?: ChatEdit[]
           applied?: string[]
+          tool?: { name: string; args?: Record<string, string> }
+          result?: string
         }
         if (data.type === 'token' && data.content) handlers.onToken(data.content)
+        if (data.type === 'tool' && data.tool) {
+          handlers.onTool?.(data.tool.name, JSON.stringify(data.tool.args ?? {}))
+        }
+        if (data.type === 'tool_result' && data.content) {
+          handlers.onTool?.('result', data.content)
+        }
+        if (data.type === 'edit' && data.edits) {
+          collectedEdits = [...collectedEdits, ...data.edits]
+        }
         if (data.type === 'error') handlers.onError(data.content || 'Unknown error')
         if (data.type === 'done') {
-          handlers.onDone(data.content || '', data.edits || [], data.applied || [])
+          handlers.onDone(
+            data.content || '',
+            data.edits?.length ? data.edits : collectedEdits,
+            data.applied || [],
+          )
         }
       } catch {
         /* ignore */
@@ -218,4 +280,18 @@ export function formatBytes(n?: number): string {
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
   return `${(n / 1024 ** 3).toFixed(2)} GB`
+}
+
+export function flattenFiles(nodes: FileNode[]): string[] {
+  const out: string[] = []
+  for (const n of nodes) {
+    if (n.type === 'file') out.push(n.path)
+    if (n.children) out.push(...flattenFiles(n.children))
+  }
+  return out
+}
+
+export function parseMentions(text: string): string[] {
+  const hits = text.match(/@([\w./-]+)/g) || []
+  return [...new Set(hits.map((h) => h.slice(1)))]
 }

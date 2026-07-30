@@ -14,7 +14,9 @@ import {
   pullOllamaModel,
   ensureModelsPath,
 } from './llm.ts'
+import { loadProjectRules, runAgentLoop } from './agent.ts'
 import { buildSystemPrompt, buildUserPayload, parseEditFences, type AgentMode } from './prompts.ts'
+import { runTerminalCommand } from './terminal.ts'
 import {
   deleteWorkspaceFile,
   gatherContextFiles,
@@ -29,10 +31,11 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
+const VERSION = '0.2.0'
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '4mb' }))
+app.use(express.json({ limit: '8mb' }))
 
 function cfg(): AppConfig {
   const c = loadConfig()
@@ -46,7 +49,7 @@ app.get('/api/health', async (_req, res) => {
   const health = await checkProviderHealth(config)
   res.json({
     app: 'LocalForge',
-    version: '0.1.0',
+    version: VERSION,
     config: {
       provider: config.provider,
       baseUrl: config.baseUrl,
@@ -55,6 +58,17 @@ app.get('/api/health', async (_req, res) => {
       workspacePath: config.workspacePath,
     },
     provider: health,
+    features: [
+      'ask',
+      'edit',
+      'agent-tools',
+      'inline-edit',
+      'model-hub',
+      'terminal',
+      'command-palette',
+      'diff-preview',
+      'project-rules',
+    ],
   })
 })
 
@@ -136,10 +150,8 @@ app.post('/api/models/pull', async (req, res) => {
   }
 
   try {
-    // Ensure Ollama writes into the user-chosen models directory when possible.
     process.env.OLLAMA_MODELS = config.modelsPath
     await pullOllamaModel(config, name, (event) => send(event))
-    // Auto-select after successful pull
     saveConfig({ selectedModel: name })
     send({ status: 'success', percent: 100, done: true, selected: name })
   } catch (err) {
@@ -188,6 +200,17 @@ app.put('/api/workspace/file', (req, res) => {
   }
 })
 
+app.post('/api/workspace/file', (req, res) => {
+  const config = cfg()
+  const { path, content = '' } = req.body as { path?: string; content?: string }
+  if (!path) return res.status(400).json({ error: 'path required' })
+  try {
+    res.json(writeWorkspaceFile(config.workspacePath, path, content))
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Create failed' })
+  }
+})
+
 app.delete('/api/workspace/file', (req, res) => {
   const config = cfg()
   const path = String(req.query.path || '')
@@ -216,6 +239,23 @@ app.get('/api/workspace/search', (req, res) => {
   res.json({ hits: searchWorkspace(config.workspacePath, q) })
 })
 
+app.get('/api/workspace/rules', (_req, res) => {
+  const config = cfg()
+  res.json({ rules: loadProjectRules(config.workspacePath) })
+})
+
+app.post('/api/terminal', async (req, res) => {
+  const config = cfg()
+  const { command } = req.body as { command?: string }
+  if (!command?.trim()) return res.status(400).json({ error: 'command required' })
+  try {
+    const result = await runTerminalCommand(config.workspacePath, command)
+    res.json(result)
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Terminal failed' })
+  }
+})
+
 app.post('/api/chat', async (req, res) => {
   const config = cfg()
   const {
@@ -226,6 +266,7 @@ app.post('/api/chat', async (req, res) => {
     activeFile,
     selection,
     applyEdits = false,
+    mentionedFiles = [],
   } = req.body as {
     prompt?: string
     mode?: AgentMode
@@ -234,17 +275,53 @@ app.post('/api/chat', async (req, res) => {
     activeFile?: string
     selection?: string
     applyEdits?: boolean
+    mentionedFiles?: string[]
   }
 
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt required' })
 
+  if (mode === 'agent') {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+    const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`)
+    const ac = new AbortController()
+    const onClientGone = () => {
+      if (!res.writableEnded) ac.abort()
+    }
+    res.on('close', onClientGone)
+    try {
+      await runAgentLoop({
+        prompt,
+        mode,
+        history,
+        openFiles: [...openFiles, ...mentionedFiles],
+        activeFile,
+        selection,
+        autoApply: applyEdits,
+        signal: ac.signal,
+        onEvent: (e) => send(e),
+      })
+    } catch (err) {
+      send({ type: 'error', content: err instanceof Error ? err.message : 'Agent failed' })
+    } finally {
+      res.end()
+    }
+    return
+  }
+
+  const rules = loadProjectRules(config.workspacePath)
   const context = gatherContextFiles(
     config.workspacePath,
-    [activeFile, ...openFiles].filter(Boolean) as string[],
+    [activeFile, ...openFiles, ...mentionedFiles].filter(Boolean) as string[],
   )
 
   const messages = [
-    { role: 'system', content: buildSystemPrompt(mode, config) },
+    {
+      role: 'system',
+      content: `${buildSystemPrompt(mode, config)}${rules ? `\n\nProject rules:\n${rules}` : ''}`,
+    },
     ...history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
     {
       role: 'user',
@@ -269,6 +346,10 @@ app.post('/api/chat', async (req, res) => {
     let full = ''
 
     while (true) {
+      if (req.aborted) {
+        reader.cancel().catch(() => undefined)
+        break
+      }
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
@@ -325,7 +406,7 @@ app.post('/api/chat', async (req, res) => {
 
     const edits = parseEditFences(full)
     const applied: string[] = []
-    if (applyEdits && (mode === 'edit' || mode === 'agent') && edits.length) {
+    if (applyEdits && mode === 'edit' && edits.length) {
       for (const edit of edits) {
         writeWorkspaceFile(config.workspacePath, edit.path, edit.content)
         applied.push(edit.path)
@@ -358,7 +439,22 @@ app.post('/api/edits/apply', (req, res) => {
   res.json({ applied })
 })
 
-// Production: serve built UI
+app.post('/api/edits/preview', (req, res) => {
+  const config = cfg()
+  const { edits } = req.body as { edits?: Array<{ path: string; content: string }> }
+  if (!edits?.length) return res.status(400).json({ error: 'edits required' })
+  const previews = edits.map((edit) => {
+    let before = ''
+    try {
+      before = readWorkspaceFile(config.workspacePath, edit.path).content
+    } catch {
+      before = ''
+    }
+    return { path: edit.path, before, after: edit.content, isNew: before === '' }
+  })
+  res.json({ previews })
+})
+
 const dist = join(ROOT, 'dist')
 if (process.env.NODE_ENV === 'production' && existsSync(dist)) {
   app.use(express.static(dist))
@@ -369,7 +465,7 @@ if (process.env.NODE_ENV === 'production' && existsSync(dist)) {
 
 app.listen(PORT, () => {
   const config = cfg()
-  console.log(`LocalForge server on http://127.0.0.1:${PORT}`)
+  console.log(`LocalForge ${VERSION} on http://127.0.0.1:${PORT}`)
   console.log(`Workspace: ${config.workspacePath}`)
   console.log(`Models path: ${config.modelsPath}`)
   console.log(`Provider: ${config.provider} @ ${config.baseUrl}`)

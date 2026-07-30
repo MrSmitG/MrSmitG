@@ -107,7 +107,8 @@ export function listTree(workspacePath: string, maxDepth = 6): FileNode[] {
       if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1
       return a.name.localeCompare(b.name)
     })) {
-      if (IGNORE.has(entry.name) || entry.name.startsWith('.')) continue
+      if (IGNORE.has(entry.name)) continue
+      if (entry.name.startsWith('.') && entry.name !== '.localforgerules') continue
       const full = join(dir, entry.name)
       const rel = relative(root, full).split(sep).join('/')
       if (entry.isDirectory()) {
@@ -188,7 +189,8 @@ export function searchWorkspace(
       return
     }
     for (const entry of entries) {
-      if (IGNORE.has(entry.name) || entry.name.startsWith('.')) continue
+      if (IGNORE.has(entry.name)) continue
+      if (entry.name.startsWith('.') && entry.name !== '.localforgerules') continue
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
         walk(full)
@@ -307,6 +309,19 @@ export function guessLanguage(path: string): string {
 
 export function seedDemoWorkspace(workspacePath: string): void {
   ensureWorkspace(workspacePath)
+  const rulesPath = join(workspacePath, '.localforgerules')
+  if (!existsSync(rulesPath)) {
+    writeFileSync(
+      rulesPath,
+      `# LocalForge project rules
+
+- Prefer TypeScript strict style.
+- Keep functions small and named clearly.
+- Do not add comments that only restate the code.
+`,
+      'utf8',
+    )
+  }
   const readme = join(workspacePath, 'README.md')
   if (existsSync(readme)) return
 
@@ -370,6 +385,17 @@ export function formatBytes(n: number): string {
       null,
       2,
     ),
+    'utf8',
+  )
+
+  writeFileSync(
+    join(workspacePath, '.localforgerules'),
+    `# LocalForge project rules
+
+- Prefer TypeScript strict style.
+- Keep functions small and named clearly.
+- Do not add comments that only restate the code.
+`,
     'utf8',
   )
 }
