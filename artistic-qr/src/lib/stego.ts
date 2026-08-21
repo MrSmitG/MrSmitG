@@ -1,7 +1,7 @@
 /** Invisible payload embed/extract — the picture carries the data, no QR grid. */
 
 const MAGIC = [0x56, 0x45, 0x49, 0x4c] // VEIL
-const MAX_PAYLOAD_BYTES = 2048
+export const MAX_PAYLOAD_BYTES = 2048
 
 function checksum(bytes: Uint8Array): number {
   let sum = 0x5a5a
@@ -12,6 +12,12 @@ function checksum(bytes: Uint8Array): number {
 }
 
 function buildPacket(text: string): Uint8Array {
+  // Every UTF-16 code unit needs at least one UTF-8 byte. Reject impossible
+  // payloads before TextEncoder allocates a potentially enormous buffer.
+  if (text.length > MAX_PAYLOAD_BYTES) {
+    throw new Error(`Message too long (max ${MAX_PAYLOAD_BYTES} bytes)`)
+  }
+
   const encoder = new TextEncoder()
   const body = encoder.encode(text)
   if (body.length > MAX_PAYLOAD_BYTES) {

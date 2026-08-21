@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { embedPayload, extractPayload } from './lib/stego'
+import { embedPayload, extractPayload, MAX_PAYLOAD_BYTES } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
 
@@ -149,6 +149,7 @@ export default function App() {
             <input
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
+              maxLength={MAX_PAYLOAD_BYTES}
               placeholder="URL, text, anything…"
               spellCheck={false}
             />
