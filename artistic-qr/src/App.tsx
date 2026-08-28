@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createLatestRequest } from './lib/latest-request'
 import { embedPayload, extractPayload } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
@@ -19,6 +20,7 @@ export default function App() {
   const lastFrameRef = useRef<ImageData | null>(null)
   const payloadRef = useRef(payload)
   const fileRef = useRef<HTMLInputElement>(null)
+  const uploadRequestsRef = useRef(createLatestRequest())
 
   useEffect(() => {
     payloadRef.current = payload
@@ -98,6 +100,7 @@ export default function App() {
 
   const onUpload = (file: File | undefined) => {
     if (!file) return
+    const request = uploadRequestsRef.current.begin()
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
@@ -107,11 +110,15 @@ export default function App() {
       const cctx = c.getContext('2d', { willReadFrequently: true })
       if (!cctx) return
       cctx.drawImage(img, 0, 0)
-      readFrame(cctx.getImageData(0, 0, c.width, c.height))
+      if (uploadRequestsRef.current.isCurrent(request)) {
+        readFrame(cctx.getImageData(0, 0, c.width, c.height))
+      }
       URL.revokeObjectURL(url)
     }
     img.onerror = () => {
-      setScanStatus('fail')
+      if (uploadRequestsRef.current.isCurrent(request)) {
+        setScanStatus('fail')
+      }
       URL.revokeObjectURL(url)
     }
     img.src = url
