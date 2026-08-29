@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { payloadForEmbedding } from './lib/payload'
 import { embedPayload, extractPayload } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
 import './App.css'
@@ -52,7 +53,7 @@ export default function App() {
 
       const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
       try {
-        const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
+        const hidden = embedPayload(raw, payloadForEmbedding(payloadRef.current))
         ctx.putImageData(hidden, 0, 0)
         lastFrameRef.current = hidden
       } catch {
