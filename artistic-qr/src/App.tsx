@@ -17,6 +17,7 @@ export default function App() {
   const timeRef = useRef(0)
   const rafRef = useRef(0)
   const lastFrameRef = useRef<ImageData | null>(null)
+  const renderReadyRef = useRef(false)
   const payloadRef = useRef(payload)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -43,24 +44,31 @@ export default function App() {
     let last = performance.now()
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000)
-      last = now
-      if (motion) timeRef.current += dt
-
-      artCtx.clearRect(0, 0, SIZE, SIZE)
-      drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
-
-      const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
+      renderReadyRef.current = false
       try {
-        const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
-        ctx.putImageData(hidden, 0, 0)
-        lastFrameRef.current = hidden
-      } catch {
-        ctx.putImageData(raw, 0, 0)
-        lastFrameRef.current = raw
-      }
+        const dt = Math.min(0.05, (now - last) / 1000)
+        last = now
+        if (motion) timeRef.current += dt
 
-      rafRef.current = requestAnimationFrame(frame)
+        artCtx.clearRect(0, 0, SIZE, SIZE)
+        drawTheme(theme, artCtx, SIZE, SIZE, timeRef.current)
+
+        const raw = artCtx.getImageData(0, 0, SIZE, SIZE)
+        try {
+          const hidden = embedPayload(raw, payloadRef.current.trim() || ' ')
+          ctx.putImageData(hidden, 0, 0)
+          lastFrameRef.current = hidden
+          renderReadyRef.current = true
+        } catch {
+          ctx.putImageData(raw, 0, 0)
+          lastFrameRef.current = raw
+          renderReadyRef.current = true
+        }
+      } catch {
+        renderReadyRef.current = false
+      } finally {
+        rafRef.current = requestAnimationFrame(frame)
+      }
     }
 
     rafRef.current = requestAnimationFrame(frame)
@@ -80,7 +88,7 @@ export default function App() {
 
   const scanFrame = () => {
     const frame = lastFrameRef.current
-    if (!frame) {
+    if (!renderReadyRef.current || !frame) {
       setScanStatus('fail')
       return
     }
@@ -89,7 +97,7 @@ export default function App() {
 
   const downloadPng = () => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!renderReadyRef.current || !canvas) return
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
     a.download = `veil-${theme}.png`
