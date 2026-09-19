@@ -192,7 +192,10 @@ export default function App() {
               type="file"
               accept="image/png,image/webp"
               hidden
-              onChange={(e) => onUpload(e.target.files?.[0])}
+              onChange={(e) => {
+                onUpload(e.target.files?.[0])
+                e.target.value = ''
+              }}
             />
           </div>
 
