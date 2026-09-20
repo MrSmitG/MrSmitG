@@ -1,10 +1,7 @@
 /** Invisible payload embed/extract — the picture carries the data, no QR grid. */
 
-import { agentDebugLog } from './agentDebug'
-
 const MAGIC = [0x56, 0x45, 0x49, 0x4c] // VEIL
 const MAX_PAYLOAD_BYTES = 2048
-let embedCallCount = 0
 
 function checksum(bytes: Uint8Array): number {
   let sum = 0x5a5a
@@ -33,20 +30,8 @@ function buildPacket(text: string): Uint8Array {
 }
 
 /** Walk pixels in a shuffled order so the signal isn't a visible scanline. */
-function pixelOrder(width: number, height: number, debugSample = false, callCount = 0): number[] {
-  const started = performance.now()
+function pixelOrder(width: number, height: number): number[] {
   const total = width * height
-  if (debugSample) {
-    // #region agent log
-    agentDebugLog({
-      hypothesisId: 'B,D',
-      location: 'src/lib/stego.ts:pixelOrder-entry',
-      message: 'pixel order allocation and shuffle started',
-      data: { callCount, width, height, total },
-      timestamp: Date.now(),
-    })
-    // #endregion
-  }
   const order = new Array<number>(total)
   for (let i = 0; i < total; i++) order[i] = i
 
@@ -59,17 +44,6 @@ function pixelOrder(width: number, height: number, debugSample = false, callCoun
     const tmp = order[i]
     order[i] = order[j]
     order[j] = tmp
-  }
-  if (debugSample) {
-    // #region agent log
-    agentDebugLog({
-      hypothesisId: 'B,D',
-      location: 'src/lib/stego.ts:pixelOrder-exit',
-      message: 'pixel order allocation and shuffle completed',
-      data: { callCount, total, durationMs: performance.now() - started },
-      timestamp: Date.now(),
-    })
-    // #endregion
   }
   return order
 }
@@ -93,32 +67,11 @@ function readBitAt(data: Uint8ClampedArray, order: number[], absBit: number): 0 
  * Invisible to the eye; VEIL's scanner recovers it.
  */
 export function embedPayload(imageData: ImageData, text: string): ImageData {
-  embedCallCount += 1
-  const callCount = embedCallCount
-  const started = performance.now()
-  const debugSample = callCount === 1 || callCount % 120 === 0
-  if (debugSample) {
-    // #region agent log
-    agentDebugLog({
-      hypothesisId: 'B,C',
-      location: 'src/lib/stego.ts:embedPayload-entry',
-      message: 'payload embedding started',
-      data: {
-        callCount,
-        width: imageData.width,
-        height: imageData.height,
-        sourceBytes: imageData.data.byteLength,
-        textCodeUnits: text.length,
-      },
-      timestamp: Date.now(),
-    })
-    // #endregion
-  }
   const packet = buildPacket(text)
   const { width, height, data } = imageData
   const out = new ImageData(new Uint8ClampedArray(data), width, height)
   const pixels = out.data
-  const order = pixelOrder(width, height, debugSample, callCount)
+  const order = pixelOrder(width, height)
 
   const bitsNeeded = packet.length * 8
   const capacity = order.length * 3
@@ -136,22 +89,6 @@ export function embedPayload(imageData: ImageData, text: string): ImageData {
     pixels[i] = setBit(pixels[i], bit)
   }
 
-  if (debugSample) {
-    // #region agent log
-    agentDebugLog({
-      hypothesisId: 'B,C',
-      location: 'src/lib/stego.ts:embedPayload-exit',
-      message: 'payload embedding completed',
-      data: {
-        callCount,
-        bitsNeeded,
-        outputBytes: pixels.byteLength,
-        durationMs: performance.now() - started,
-      },
-      timestamp: Date.now(),
-    })
-    // #endregion
-  }
   return out
 }
 
