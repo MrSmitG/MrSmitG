@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { embedPayload, extractPayload } from './lib/stego'
 import { THEMES, drawTheme, type ThemeId } from './lib/themes'
+import { agentDebugLog } from './lib/agentDebug'
 import './App.css'
 
 const SIZE = 512
@@ -41,10 +42,25 @@ export default function App() {
     if (!ctx || !artCtx) return
 
     let last = performance.now()
+    let frameCount = 0
 
     const frame = (now: number) => {
+      frameCount += 1
+      const frameStarted = performance.now()
+      const sampleFrame = frameCount === 1 || frameCount % 120 === 0
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
+      if (sampleFrame) {
+        // #region agent log
+        agentDebugLog({
+          hypothesisId: 'A',
+          location: 'src/App.tsx:frame-entry',
+          message: 'animation frame entered',
+          data: { frameCount, motion, dtMs: dt * 1000 },
+          timestamp: Date.now(),
+        })
+        // #endregion
+      }
       if (motion) timeRef.current += dt
 
       artCtx.clearRect(0, 0, SIZE, SIZE)
@@ -60,6 +76,28 @@ export default function App() {
         lastFrameRef.current = raw
       }
 
+      if (sampleFrame) {
+        const memory = (
+          performance as Performance & {
+            memory?: { usedJSHeapSize: number; totalJSHeapSize: number }
+          }
+        ).memory
+        // #region agent log
+        agentDebugLog({
+          hypothesisId: 'C,D',
+          location: 'src/App.tsx:frame-exit',
+          message: 'animation frame completed',
+          data: {
+            frameCount,
+            motion,
+            durationMs: performance.now() - frameStarted,
+            usedJSHeapSize: memory?.usedJSHeapSize ?? null,
+            totalJSHeapSize: memory?.totalJSHeapSize ?? null,
+          },
+          timestamp: Date.now(),
+        })
+        // #endregion
+      }
       rafRef.current = requestAnimationFrame(frame)
     }
 
