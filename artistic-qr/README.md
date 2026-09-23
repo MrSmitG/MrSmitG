@@ -10,7 +10,7 @@ Subjects are limited to **cars, portraits, and secular monuments** — no idols,
 2. Enter a URL or message
 3. VEIL embeds it into pixel LSBs (invisible steganography)
 4. Download a PNG, or hit **Scan this frame**
-5. Later: **Scan a PNG** to unlock the same message
+5. Later: **Scan PNG / explicitly lossless WebP** to unlock the same message
 
 Phone camera QR apps will **not** read these images — that’s intentional.
 
@@ -24,8 +24,8 @@ npm run dev
 
 ## Important
 
-- Save / share as **PNG** (or lossless WebP)
-- Screenshots and JPEG recompression strip the hidden bits
+- Save / share as **PNG** (or WebP encoded explicitly in lossless mode)
+- Screenshots, JPEG recompression, and lossy WebP encoding destroy the hidden bits
 - Keep messages under ~2KB
 
 ## Layout
