@@ -185,7 +185,7 @@ export default function App() {
               Download PNG
             </button>
             <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
-              Scan a PNG
+              Scan PNG / explicitly lossless WebP
             </button>
             <input
               ref={fileRef}
@@ -203,7 +203,8 @@ export default function App() {
           )}
           {scanStatus === 'fail' && (
             <p className="scan fail" role="status" data-testid="scan-fail">
-              No hidden message found. Use a PNG downloaded from VEIL (not a screenshot/JPEG).
+              No hidden message found. Use a VEIL PNG or explicitly lossless WebP. Screenshots,
+              JPEG, and lossy WebP recompression destroy the hidden bits.
             </p>
           )}
 
@@ -215,8 +216,14 @@ export default function App() {
                 VEIL paints pure art, then quietly flips the least-significant bits of pixels to store
                 your message — invisible, but recoverable.
               </li>
-              <li>Phone QR apps will not see anything. Scan here, or reopen a downloaded PNG in VEIL.</li>
-              <li>Keep files as PNG/WebP. Screenshots and JPEG recompression destroy the hidden bits.</li>
+              <li>
+                Phone QR apps will not see anything. Scan here, or reopen a VEIL PNG or explicitly
+                lossless WebP.
+              </li>
+              <li>
+                Keep files as PNG or explicitly lossless WebP. Screenshots, JPEG, and lossy WebP
+                recompression destroy the hidden bits.
+              </li>
             </ol>
           </details>
         </section>
